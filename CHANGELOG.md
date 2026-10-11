@@ -8,4 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.1.0]
 
-- First release.
+- `encode` frames a byte string as a chunked body split into fixed-size pieces.
+- `Decoder` incrementally decodes chunked bytes fed in any split, ignoring chunk
+  extensions and trailer fields (RFC 7230 section 4.1).
+- `decode` decodes a complete message in one call.
+- `ChunkedError` is raised on a malformed size line or broken framing.
