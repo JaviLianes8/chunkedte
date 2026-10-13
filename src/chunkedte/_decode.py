@@ -26,8 +26,10 @@ class Decoder:
 
     Size lines, chunk extensions and trailer fields are checked against the RFC 9112
     grammar; only CRLF ends a line. Extensions are validated and then ignored, trailer
-    fields are kept in :attr:`trailers`. Bytes after the final CRLF land in
-    :attr:`unused_data`. After an error every later :meth:`feed` raises again.
+    fields are kept in :attr:`trailers` (keep them apart from the header section, RFC 9110
+    section 6.5.2). Bytes after the final CRLF land in :attr:`unused_data`. When
+    :meth:`feed` raises, the pieces decoded in that call are dropped, and every later
+    :meth:`feed` raises again.
     """
 
     def __init__(self, limits: Limits | None = None) -> None:

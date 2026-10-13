@@ -65,7 +65,21 @@ def test_trailers_round_trip_through_the_decoder() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["Content-Length", "transfer-encoding", "Host", "TRAILER", "TE", "Connection"]
+    "name",
+    [
+        "Content-Length",
+        "transfer-encoding",
+        "Host",
+        "TRAILER",
+        "TE",
+        "Connection",
+        "Content-Type",
+        "Content-Encoding",
+        "Authorization",
+        "Set-Cookie",
+        "Cache-Control",
+        "Max-Forwards",
+    ],
 )
 def test_framing_and_routing_fields_are_refused_as_trailers(name: str) -> None:
     with pytest.raises(ChunkedError, match="cannot be sent as a trailer"):

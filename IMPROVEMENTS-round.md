@@ -14,7 +14,7 @@ Progress:
 - [x] Mutation run (guards removed one at a time, each must fail the suite)
 - [x] Docs: README, CHANGELOG, docstrings, packaging metadata
 - [x] Gates: ruff format, ruff check, mypy --strict, pytest
-- [ ] Independent review findings fixed with regression tests
+- [x] Independent review findings fixed with regression tests
 - [ ] Pull request opened, guard clean
 
 ## Starting point
@@ -121,3 +121,24 @@ checked with an empty buffer) and is now killed; one was a redundant type check 
 `is_chunked` that the regex already enforces, now removed; the last (`\Z` to `$` in the
 Transfer-Encoding list parser) is equivalent, because the zero-length-match guard rejects
 the trailing newline either way.
+
+## Independent review
+
+One medium and eight low findings, all handled:
+
+- `is_chunked` backtracked quadratically on long whitespace runs (two adjacent OWS runs in
+  the list regex). Fixed by moving the trailing OWS inside the optional coding group;
+  regression tests with 64 KiB of spaces and tabs.
+- Transfer-Encoding errors echoed the whole field; now cut to 64 characters, with a test.
+- The encoder refused only framing and routing trailers; it now refuses every RFC 9110
+  section 6.5.1 category (authentication, request modifiers, response controls, content
+  format), tested.
+- The CLI failed on a latin-1 trailer with an ASCII terminal; trailer bytes outside ASCII
+  are now escaped, tested.
+- Documented: received trailers must stay apart from the header section, `feed` drops the
+  pieces of the call that raises, the CLI may leave a truncated body on stdout on failure,
+  and `is_chunked` leaves HEAD, 1xx, 204, 304, CONNECT and HTTP/1.0 to the caller.
+- Kept on purpose: two wall-clock tests with generous bounds (they are the only way to
+  catch a quadratic regression, and the mutation run showed they bite), CLI tests that use
+  `tmp_path`, and Python 3.10 as the floor (the code uses `X | Y` type aliases).
+

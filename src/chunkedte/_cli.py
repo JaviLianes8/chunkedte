@@ -74,7 +74,9 @@ def _decode(source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
     if decoder.unused_data or source.read(1):
         raise ChunkedError("bytes after the end of the chunked message")
     for name, value in decoder.trailers:
-        print(f"{name}: {value}", file=err)
+        # Escape obs-text and C1 bytes so any terminal encoding can print them.
+        safe = value.encode("latin-1").decode("ascii", "backslashreplace")
+        print(f"{name}: {safe}", file=err)
     return 0
 
 

@@ -10,7 +10,9 @@ _TOKEN = r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+"
 _QUOTED = r'"(?:[\t \x21\x23-\x5b\x5d-\x7e\x80-\xff]|\\[\t \x21-\x7e\x80-\xff])*"'
 # RFC 9110 section 10.1.4: transfer-coding = token *( OWS ";" OWS transfer-parameter ).
 _CODING = re.compile(rf"({_TOKEN})((?:[ \t]*;[ \t]*{_TOKEN}[ \t]*=[ \t]*(?:{_TOKEN}|{_QUOTED}))*)")
-_MEMBER = re.compile(rf"[ \t]*(?:{_CODING.pattern})?[ \t]*(?:,|\Z)")
+# The trailing OWS sits inside the optional group: two adjacent OWS runs backtrack
+# quadratically on a long run of spaces.
+_MEMBER = re.compile(rf"[ \t]*(?:{_CODING.pattern}[ \t]*)?(?:,|\Z)")
 
 
 def is_chunked(
@@ -27,6 +29,10 @@ def is_chunked(
     Raises :class:`ChunkedError` when both fields are present, when chunked is applied
     twice or carries parameters, when a request's final coding is not chunked, and when the
     field is not a valid list of transfer codings.
+
+    The caller still applies the rest of RFC 9112 section 6.3: responses to HEAD, 1xx, 204,
+    304 and 2xx to CONNECT have no body, and an HTTP/1.0 message with Transfer-Encoding has
+    faulty framing (section 6.1).
     """
     if transfer_encoding is None:
         return False
@@ -53,7 +59,7 @@ def _parse_codings(value: str) -> list[tuple[str, str]]:
     while position < len(value):
         match = _MEMBER.match(value, position)
         if match is None or match.end() == position:
-            raise ChunkedError(f"malformed Transfer-Encoding: {value!r}")
+            raise ChunkedError(f"malformed Transfer-Encoding: {value[:64]!r}")
         if match.group(1) is not None:
             codings.append((match.group(1).lower(), match.group(2)))
         position = match.end()

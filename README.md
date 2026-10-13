@@ -105,7 +105,9 @@ $ printf 'abc' | chunkedte encode --chunk-size 2 --trailer "X-Sum: 1"
 ```
 
 `decode` writes the body to stdout and the trailer fields to stderr; `encode` frames stdin
-(or a file) as a chunked body. Both exit with status 1 and a message on bad input.
+(or a file) as a chunked body. Both exit with status 1 and a message on bad input; body
+bytes decoded before the error may already be on stdout, so treat the output of a failed
+run as truncated. Trailer bytes outside printable ASCII are written as escapes.
 `python -m chunkedte` works too.
 
 ## What "strict" means here
@@ -125,10 +127,19 @@ Extensions are validated and then ignored, as RFC 9112 asks. The default `Limits
 size line at 4 KiB, all extensions of a message at 16 KiB, the trailer section at 16 KiB and
 a chunk size below 2**63 (so a forwarded size never wraps in a 64-bit parser); the body is
 unbounded unless you set `max_body_size`. A line split over many small reads is scanned
-once, so decoding stays linear in the input. The encoder refuses trailer names that are
-not tokens, values with control bytes or edge whitespace, and fields that frame or route a
-message (Content-Length, Transfer-Encoding, Trailer, TE, Host, Connection, Keep-Alive,
-Upgrade). There is no lenient mode.
+once, so decoding stays linear in the input. When `feed` raises, the pieces decoded in that
+call are dropped with it. Received trailers are returned as they came: RFC 9110 section
+6.5.2 says not to merge them into the header section, so keep them apart (a `Content-Length`
+trailer, say, must never reach your framing logic). The encoder refuses trailer names that
+are not tokens, values with control bytes or edge whitespace, and the fields RFC 9110
+section 6.5.1 needs before the content: framing and routing (Content-Length,
+Transfer-Encoding, Trailer, TE, Host, Connection, Keep-Alive, Upgrade, Max-Forwards),
+authentication (Authorization, Proxy-Authorization, WWW-Authenticate, Proxy-Authenticate,
+Cookie, Set-Cookie), request modifiers and response controls (Expect, Range,
+Cache-Control) and content format (Content-Type, Content-Encoding, Content-Range).
+`is_chunked` leaves the rest of RFC 9112 section 6.3 to you: responses to HEAD, 1xx, 204,
+304 and 2xx to CONNECT carry no body, and an HTTP/1.0 message with Transfer-Encoding has
+faulty framing. There is no lenient mode.
 
 ## Why
 

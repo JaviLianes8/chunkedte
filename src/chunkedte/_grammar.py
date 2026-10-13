@@ -25,18 +25,32 @@ FIELD_NAME = re.compile(TOKEN + rb":")
 FIELD_VALUE = re.compile(rb"[\t \x21-\x7e\x80-\xff]*")
 TOKEN_RE = re.compile(TOKEN)
 
-# Fields that frame, route or control the connection cannot arrive after the content
-# (RFC 9110 section 6.5.1), so the encoder refuses to send them as trailers.
+# Fields needed before the content (framing, routing, connection control, authentication,
+# request modifiers, response controls, content format: RFC 9110 section 6.5.1) cannot be
+# sent as trailers, so the encoder refuses them.
 FORBIDDEN_TRAILERS = frozenset(
     {
+        "authorization",
+        "cache-control",
         "connection",
+        "content-encoding",
         "content-length",
+        "content-range",
+        "content-type",
+        "cookie",
+        "expect",
         "host",
         "keep-alive",
+        "max-forwards",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "range",
+        "set-cookie",
         "te",
         "trailer",
         "transfer-encoding",
         "upgrade",
+        "www-authenticate",
     }
 )
 

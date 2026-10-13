@@ -22,6 +22,16 @@ def test_decode_prints_the_body_and_trailers_on_stderr() -> None:
     assert _run(["decode"], message) == (0, b"hello", "X-Sum: 1\n")
 
 
+def test_decode_escapes_trailer_bytes_for_an_ascii_terminal() -> None:
+    raw = io.BytesIO()
+    stderr = io.TextIOWrapper(raw, encoding="ascii", newline="")
+    message = b"0\r\nA: caf\xe9\x9b\r\n\r\n"
+    code = main(["decode"], stdin=io.BytesIO(message), stdout=io.BytesIO(), stderr=stderr)
+    stderr.flush()
+    assert code == 0
+    assert raw.getvalue() == b"A: caf\\xe9\\x9b\n"
+
+
 def test_decode_reads_large_input_in_blocks() -> None:
     body = bytes(range(256)) * 1000
     code, out, _ = _run(["decode"], encode(body, chunk_size=1000))

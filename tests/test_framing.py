@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from chunkedte import ChunkedError, is_chunked
@@ -82,3 +84,22 @@ def test_a_field_without_codings_is_an_error(value: str) -> None:
 def test_a_non_str_value_is_a_type_error() -> None:
     with pytest.raises(TypeError):
         is_chunked(b"chunked")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [" " * 65536 + "x y", "\t" * 65536 + ",", " " * 65536],
+    ids=["spaces", "tabs", "blank"],
+)
+def test_long_whitespace_runs_are_parsed_in_linear_time(value: str) -> None:
+    # Two adjacent OWS runs in the list regex once made this quadratic.
+    started = time.perf_counter()
+    with pytest.raises(ChunkedError):
+        is_chunked(value)
+    assert time.perf_counter() - started < 0.5
+
+
+def test_error_messages_do_not_echo_a_huge_field() -> None:
+    with pytest.raises(ChunkedError) as caught:
+        is_chunked("x y" * 50_000)
+    assert len(str(caught.value)) < 200
