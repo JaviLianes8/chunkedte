@@ -48,8 +48,6 @@ def is_chunked(
 
 
 def _parse_codings(value: str) -> list[tuple[str, str]]:
-    if not isinstance(value, str):
-        raise TypeError("Transfer-Encoding must be a str")
     codings: list[tuple[str, str]] = []
     position = 0
     while position < len(value):

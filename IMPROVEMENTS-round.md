@@ -10,10 +10,10 @@ Progress:
 - [x] Encoder: incremental `Encoder`, trailers on `encode`, field validation
 - [x] `is_chunked` for Transfer-Encoding and Content-Length (RFC 9112 section 6.1 and 6.3)
 - [x] Command line tool (`python -m chunkedte`)
-- [ ] Contracts: fetched RFC grammar, advisory payloads, differential fuzz, typing, README, wheel e2e
-- [ ] Mutation run (guards removed one at a time, each must fail the suite)
+- [x] Contracts: fetched RFC grammar, advisory payloads, differential fuzz, typing, README, wheel e2e
+- [x] Mutation run (guards removed one at a time, each must fail the suite)
 - [x] Docs: README, CHANGELOG, docstrings, packaging metadata
-- [ ] Gates: ruff format, ruff check, mypy --strict, pytest
+- [x] Gates: ruff format, ruff check, mypy --strict, pytest
 - [ ] Independent review findings fixed with regression tests
 - [ ] Pull request opened, guard clean
 
@@ -110,3 +110,14 @@ vectors, cited with their URL next to them.
 
 Out of scope: content codings (gzip inside chunked), HTTP header parsing beyond the two
 framing fields, and any lenient mode.
+
+## Mutation run
+
+66 hand-written mutants (one guard, bound or grammar class changed at a time) over every
+module, each run against the whole suite with bytecode writes off, `__pycache__` purged
+and a per-mutant timeout; the suite was green before and after. 63 were killed at once.
+Of the three survivors, one exposed a weak test (`unused_data` before completion was
+checked with an empty buffer) and is now killed; one was a redundant type check in
+`is_chunked` that the regex already enforces, now removed; the last (`\Z` to `$` in the
+Transfer-Encoding list parser) is equivalent, because the zero-length-match guard rejects
+the trailing newline either way.

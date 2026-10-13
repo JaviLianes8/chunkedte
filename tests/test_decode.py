@@ -94,7 +94,7 @@ def test_bytes_after_the_message_go_to_unused_data() -> None:
 
 def test_unused_data_is_empty_before_completion() -> None:
     decoder = Decoder()
-    decoder.feed(b"3\r\nab")
+    decoder.feed(b"3\r\nabc\r\n0\r\nX: partial")
     assert decoder.unused_data == b""
 
 
