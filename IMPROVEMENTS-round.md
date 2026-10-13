@@ -2,17 +2,17 @@
 
 Progress:
 - [x] Brainstorm ranked improvements (this file)
-- [ ] Strict chunk-size line: HEXDIG only, chunk-ext grammar, CRLF only, size cap
-- [ ] Strict framing after chunk data and in the trailer section (field-line grammar, no obs-fold)
-- [ ] Limits (`Limits`, `LimitError`): line, total extensions, chunk size, body, trailer section
-- [ ] Linear time on hostile input (no rescans of buffered bytes)
-- [ ] Trailers exposed, bytes after the message kept apart (`unused_data`), `decode` rejects them
-- [ ] Encoder: incremental `Encoder`, trailers on `encode`, field validation
-- [ ] `is_chunked` for Transfer-Encoding and Content-Length (RFC 9112 section 6.1 and 6.3)
-- [ ] Command line tool (`python -m chunkedte`)
+- [x] Strict chunk-size line: HEXDIG only, chunk-ext grammar, CRLF only, size cap
+- [x] Strict framing after chunk data and in the trailer section (field-line grammar, no obs-fold)
+- [x] Limits (`Limits`, `LimitError`): line, total extensions, chunk size, body, trailer section
+- [x] Linear time on hostile input (no rescans of buffered bytes)
+- [x] Trailers exposed, bytes after the message kept apart (`unused_data`), `decode` rejects them
+- [x] Encoder: incremental `Encoder`, trailers on `encode`, field validation
+- [x] `is_chunked` for Transfer-Encoding and Content-Length (RFC 9112 section 6.1 and 6.3)
+- [x] Command line tool (`python -m chunkedte`)
 - [ ] Contracts: fetched RFC grammar, advisory payloads, differential fuzz, typing, README, wheel e2e
 - [ ] Mutation run (guards removed one at a time, each must fail the suite)
-- [ ] Docs: README, CHANGELOG, docstrings, packaging metadata
+- [x] Docs: README, CHANGELOG, docstrings, packaging metadata
 - [ ] Gates: ruff format, ruff check, mypy --strict, pytest
 - [ ] Independent review findings fixed with regression tests
 - [ ] Pull request opened, guard clean
