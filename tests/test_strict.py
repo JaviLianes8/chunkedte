@@ -81,9 +81,10 @@ def test_a_bare_lf_ending_a_size_line_is_rejected(message: bytes) -> None:
         decode(message)
 
 
-def test_a_bare_lf_as_the_first_byte_of_a_line_is_rejected() -> None:
+@pytest.mark.parametrize("message", [b"\n5\r\nhello\r\n0\r\n\r\n", b"\n5\r"])
+def test_a_bare_lf_as_the_first_byte_of_a_line_is_rejected(message: bytes) -> None:
     with pytest.raises(ChunkedError, match="bare LF"):
-        decode(b"\n5\r\nhello\r\n0\r\n\r\n")
+        Decoder().feed(message)
 
 
 @pytest.mark.parametrize("message", [b"5\r\r\nhello\r\n0\r\n\r\n", b"5;a=b\rc\r\nhello"])
