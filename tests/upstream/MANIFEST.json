@@ -1,0 +1,20 @@
+{
+  "rfc9112.txt": {
+    "title": "RFC 9112, HTTP/1.1 (June 2022)",
+    "url": "https://www.rfc-editor.org/rfc/rfc9112.txt",
+    "revision": "RFC 9112 as published (RFCs are immutable)",
+    "fetched": "2026-10-13",
+    "licence": "IETF Trust Legal Provisions",
+    "size": 109913,
+    "sha256": "e4f426bac6206b67fdf9e0da826154f70588db2133a0a86b15cde4ff725d8937"
+  },
+  "rfc9110.txt": {
+    "title": "RFC 9110, HTTP Semantics (June 2022)",
+    "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+    "revision": "RFC 9110 as published (RFCs are immutable)",
+    "fetched": "2026-10-13",
+    "licence": "IETF Trust Legal Provisions",
+    "size": 502941,
+    "sha256": "21c1cdce6ab0e5509b04d84a28000836c7a087cf786efe6f04877ebfff47232a"
+  }
+}

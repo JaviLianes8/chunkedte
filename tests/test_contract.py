@@ -4,7 +4,16 @@ import chunkedte
 
 # The public API. Add every exported name here as the library grows; this list is the
 # contract and the test below fails if the module and this list disagree.
-PUBLIC_API: list[str] = ["ChunkedError", "Decoder", "decode", "encode"]
+PUBLIC_API: list[str] = [
+    "ChunkedError",
+    "Decoder",
+    "Encoder",
+    "LimitError",
+    "Limits",
+    "decode",
+    "encode",
+    "is_chunked",
+]
 
 
 def test_all_lists_exactly_the_public_api() -> None:
@@ -24,3 +33,8 @@ def test_version_is_a_three_part_string() -> None:
 
 def test_the_package_ships_type_information() -> None:
     assert importlib.resources.files("chunkedte").joinpath("py.typed").is_file()
+
+
+def test_errors_are_value_errors_and_limit_errors_are_chunked_errors() -> None:
+    assert issubclass(chunkedte.ChunkedError, ValueError)
+    assert issubclass(chunkedte.LimitError, chunkedte.ChunkedError)

@@ -1,6 +1,7 @@
 # chunkedte
 
-Incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer-encoding
+Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding
+(RFC 9112 section 7.1).
 
 ## Install
 
@@ -8,56 +9,147 @@ Incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer-encoding
 pip install chunkedte
 ```
 
+Python 3.10 or newer. No dependencies.
+
 ## Usage
 
-Encode a byte string into a complete chunked body:
+Decode a complete message in one call. `decode` raises `ChunkedError` if the message is
+malformed, unfinished, or followed by more bytes:
 
 ```python
-from chunkedte import encode
+from chunkedte import ChunkedError, decode
 
-encode(b"hello")
-# b'5\r\nhello\r\n0\r\n\r\n'
-
-encode(b"abcd", chunk_size=2)
-# b'2\r\nab\r\n2\r\ncd\r\n0\r\n\r\n'
-```
-
-Decode a complete message in one call:
-
-```python
-from chunkedte import decode
-
-decode(b"5\r\nhello\r\n0\r\n\r\n")
+print(decode(b"5\r\nhello\r\n0\r\n\r\n"))
+try:
+    decode(b"0x5\r\nhello\r\n0\r\n\r\n")
+except ChunkedError as error:
+    print(error)
 # b'hello'
+# malformed chunk-size line: b'0x5'
 ```
 
-Decode incrementally as bytes arrive off a socket. Feed any split, in any size,
-and collect the body pieces as they become available:
+Decode incrementally as bytes arrive off a socket. `Decoder.feed` takes any split and
+returns the body pieces available so far; trailer fields and whatever follows the message
+(a pipelined request, say) are kept apart:
 
 ```python
 from chunkedte import Decoder
 
 decoder = Decoder()
-body = bytearray()
-for part in stream:  # bytes in arbitrary splits
+body = b""
+for part in [b"4\r\nwi", b"ki\r\n5;sig=ab\r\npedia\r\n0\r\nDigest: x\r\n", b"\r\nGET /"]:
     for piece in decoder.feed(part):
         body += piece
-assert decoder.is_complete
+print(body, decoder.is_complete)
+print(decoder.trailers, decoder.unused_data)
+# b'wikipedia' True
+# [('Digest', 'x')] b'GET /'
 ```
 
-Chunk extensions (`5;name=value`) and trailer fields are consumed and ignored. A
-size line that is not valid hexadecimal raises `ChunkedError`.
+Bound what a peer can make you buffer. Passing a bound raises `LimitError`, a subclass of
+`ChunkedError`, so a server can answer 413 or 431 instead of 400:
+
+```python
+from chunkedte import Decoder, LimitError, Limits
+
+decoder = Decoder(Limits(max_body_size=1024, max_trailer_size=4096))
+try:
+    decoder.feed(b"10000\r\n")
+except LimitError as error:
+    print(error)
+print(Limits())
+# body exceeds max_body_size
+# Limits(max_line_size=4096, max_extensions_size=16384, max_chunk_size=9223372036854775807, max_body_size=None, max_trailer_size=16384)
+```
+
+Encode in one call, or stream with `Encoder` and close with optional trailer fields:
+
+```python
+from chunkedte import Encoder, encode
+
+print(encode(b"abcd", chunk_size=2))
+encoder = Encoder()
+print(encoder.write(b"hello") + encoder.finish({"X-Checksum": "42"}))
+# b'2\r\nab\r\n2\r\ncd\r\n0\r\n\r\n'
+# b'5\r\nhello\r\n0\r\nX-Checksum: 42\r\n\r\n'
+```
+
+Decide whether a message body is chunked at all from its Transfer-Encoding and
+Content-Length values (`None` when absent). `is_chunked` applies RFC 9112 sections 6.1 and
+6.3 and raises `ChunkedError` on the combinations used for request smuggling:
+
+```python
+from chunkedte import ChunkedError, is_chunked
+
+print(is_chunked("gzip, chunked"), is_chunked(None, "12"))
+print(is_chunked("gzip", request=False))
+for te, cl in [("chunked", "12"), ("chunked, chunked", None), ("chunked, gzip", None)]:
+    try:
+        is_chunked(te, cl)
+    except ChunkedError as error:
+        print(error)
+# True False
+# False
+# both Transfer-Encoding and Content-Length are present
+# chunked is applied more than once
+# chunked is not the final transfer coding of a request
+```
+
+### Command line
+
+```
+$ printf '5\r\nhello\r\n0\r\nX-Sum: 1\r\n\r\n' | chunkedte decode
+hello
+X-Sum: 1
+$ printf 'abc' | chunkedte encode --chunk-size 2 --trailer "X-Sum: 1"
+```
+
+`decode` writes the body to stdout and the trailer fields to stderr; `encode` frames stdin
+(or a file) as a chunked body. Both exit with status 1 and a message on bad input; body
+bytes decoded before the error may already be on stdout, so treat the output of a failed
+run as truncated. Trailer bytes outside printable ASCII are written as escapes.
+`python -m chunkedte` works too.
+
+## What "strict" means here
+
+Every leniency in a chunked parser is a way for two HTTP processors to disagree on where a
+message ends, which is how request smuggling works. So the decoder rejects:
+
+- a chunk size that is not only hex digits (`+5`, `0x5`, `5_0`, ` 5`, `5 `);
+- chunk extensions that do not follow the grammar (whitespace is allowed only around `;`
+  and `=`, values are tokens or quoted strings);
+- a bare LF or a bare CR anywhere a CRLF is expected, including inside an extension;
+- anything other than CRLF right after the chunk data;
+- trailer lines that are not `name: value`, with whitespace before the colon, with control
+  bytes, or folded onto a continuation line (obs-fold).
+
+Extensions are validated and then ignored, as RFC 9112 asks. The default `Limits` cap one
+size line at 4 KiB, all extensions of a message at 16 KiB, the trailer section at 16 KiB and
+a chunk size below 2**63 (so a forwarded size never wraps in a 64-bit parser); the body is
+unbounded unless you set `max_body_size`. A line split over many small reads is scanned
+once, so decoding stays linear in the input. When `feed` raises, the pieces decoded in that
+call are dropped with it. Received trailers are returned as they came: RFC 9110 section
+6.5.2 says not to merge them into the header section, so keep them apart (a `Content-Length`
+trailer, say, must never reach your framing logic). The encoder refuses trailer names that
+are not tokens, values with control bytes or edge whitespace, and the fields RFC 9110
+section 6.5.1 needs before the content: framing and routing (Content-Length,
+Transfer-Encoding, Trailer, TE, Host, Connection, Keep-Alive, Upgrade, Max-Forwards),
+authentication (Authorization, Proxy-Authorization, WWW-Authenticate, Proxy-Authenticate,
+Cookie, Set-Cookie), request modifiers and response controls (Expect, Range,
+Cache-Control) and content format (Content-Type, Content-Encoding, Content-Range).
+`is_chunked` leaves the rest of RFC 9112 section 6.3 to you: responses to HEAD, 1xx, 204,
+304 and 2xx to CONNECT carry no body, and an HTTP/1.0 message with Transfer-Encoding has
+faulty framing. There is no lenient mode.
 
 ## Why
 
-Chunked transfer-encoding is simple to frame and surprisingly easy to get wrong:
-the terminating `0` chunk, the trailing blank line, chunk extensions and trailer
-fields are routinely mishandled in hand-rolled parsers. The existing options are
-either tied to one HTTP client (`lowhaio-chunked` is encode-only for lowhaio), a
-server wrapper (`uwsgi-chunked` runs under uWSGI), or a full protocol state
-machine (`h11`). This is a standalone, typed, zero-dependency codec: feed bytes,
-get the body; give it bytes, get a chunked body. Reach for it when you move
-chunked framing yourself and do not want to pull in an HTTP stack.
+Chunked transfer coding is simple to frame and easy to get subtly wrong: the terminating
+`0` chunk, the closing blank line, extensions and trailers are routinely mishandled, and
+the security advisories of the last few years (waitress, h11, aiohttp, netty, Go net/http,
+Node.js) are all variations on a parser accepting bytes another parser reads differently.
+The existing Python options are tied to one HTTP stack (`h11`, `aiohttp`) or to one server.
+This is a standalone, typed, zero-dependency codec with the strict behaviour by default:
+reach for it when you move chunked framing yourself and do not want a whole HTTP stack.
 
 ## License
 

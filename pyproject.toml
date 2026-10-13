@@ -4,21 +4,41 @@ build-backend = "hatchling.build"
 
 [project]
 name = "chunkedte"
-version = "0.1.0"
-description = "Incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer-encoding"
+version = "0.2.0"
+description = "Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Javier Lianes", email = "javier@lianes8studio.com" }]
-keywords = []
+keywords = [
+    "http",
+    "chunked",
+    "transfer-encoding",
+    "rfc9112",
+    "request-smuggling",
+    "trailers",
+    "codec",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
 dependencies = []
+
+[project.scripts]
+chunkedte = "chunkedte._cli:main"
 
 [project.optional-dependencies]
 dev = ["ruff", "mypy", "pytest", "build", "twine"]
