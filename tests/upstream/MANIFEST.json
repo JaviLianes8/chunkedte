@@ -16,5 +16,23 @@
     "licence": "IETF Trust Legal Provisions",
     "size": 502941,
     "sha256": "21c1cdce6ab0e5509b04d84a28000836c7a087cf786efe6f04877ebfff47232a"
+  },
+  "llhttp-request-transfer-encoding.md": {
+    "title": "llhttp test corpus, test/request/transfer-encoding.md",
+    "url": "https://raw.githubusercontent.com/nodejs/llhttp/v9.4.2/test/request/transfer-encoding.md",
+    "revision": "llhttp tag v9.4.2 (the llhttp of Node.js 24)",
+    "fetched": "2026-10-21",
+    "licence": "MIT (llhttp)",
+    "size": 31019,
+    "sha256": "0e163607c84f29b1c52c9faa43e9ad33320f363421080f3ebf27f09e97987b57"
+  },
+  "llhttp-response-transfer-encoding.md": {
+    "title": "llhttp test corpus, test/response/transfer-encoding.md",
+    "url": "https://raw.githubusercontent.com/nodejs/llhttp/v9.4.2/test/response/transfer-encoding.md",
+    "revision": "llhttp tag v9.4.2 (the llhttp of Node.js 24)",
+    "fetched": "2026-10-21",
+    "licence": "MIT (llhttp)",
+    "size": 10807,
+    "sha256": "44718fed590f99603a5e440fdde207d9401ddca69bd6f26be2bb5a176bb87360"
   }
 }
