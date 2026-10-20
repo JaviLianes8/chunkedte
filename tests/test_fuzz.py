@@ -6,32 +6,10 @@ import itertools
 import random
 
 import pytest
+from generators import SEEDS, mutate
 from reference import Rejected, Result, parse
 
 from chunkedte import ChunkedError, Decoder, encode
-
-SEEDS = [
-    b"5\r\nhello\r\n0\r\n\r\n",
-    b'3;a=b\r\nabc\r\n2 ; q = "x\\"y"\r\nde\r\n0;end\r\n\r\n',
-    b"A\r\n0123456789\r\n0\r\nX-Sum: 42\r\nNote:  two words \r\n\r\n",
-    b"1\r\n\r\r\n1\r\n\n\r\n00\r\n\r\nNEXT",
-    b"0\r\nA:\r\nB:\x80\xff\r\n\r\n",
-]
-ALPHABET = [bytes([value]) for value in b'\r\n \t;="\\:0aAgx+_\x00\x7f\x80,'] + [b"\r\n"]
-
-
-def _mutate(rng: random.Random, message: bytes) -> bytes:
-    data = bytearray(message)
-    for _ in range(rng.randint(1, 3)):
-        at = rng.randint(0, len(data))
-        operation = rng.randint(0, 2)
-        if operation == 0:
-            data[at:at] = rng.choice(ALPHABET)
-        elif operation == 1 and at < len(data):
-            del data[at]
-        elif at < len(data):
-            data[at : at + 1] = rng.choice(ALPHABET)
-    return bytes(data)
 
 
 def _decoder_result(message: bytes, cuts: list[int]) -> Result | None:
@@ -57,7 +35,7 @@ def _reference_result(message: bytes) -> Result | None:
 
 def _cases(count: int) -> list[bytes]:
     rng = random.Random(9112)
-    return [_mutate(rng, rng.choice(SEEDS)) for _ in range(count)]
+    return [mutate(rng, rng.choice(SEEDS)) for _ in range(count)]
 
 
 def test_every_seed_is_valid_for_both_readings() -> None:

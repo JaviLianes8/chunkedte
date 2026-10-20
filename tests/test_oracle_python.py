@@ -14,12 +14,10 @@ from http.client import HTTPResponse
 from typing import Any
 
 import pytest
+from generators import SEEDS, Reading, mutate, reading, valid_message
 from reference import Rejected, parse
-from test_fuzz import SEEDS, _mutate
-from test_oracle_llhttp import _ours, _valid_message
 
 HEAD = b"POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n"
-Reading = tuple[bytes, list[tuple[str, str]], int]
 
 
 def _h11(h11: Any, case: bytes) -> Reading | None:
@@ -59,11 +57,11 @@ def _http_client(case: bytes) -> bytes:
 def test_h11_reads_every_message_both_accept_the_same_way(seed: int) -> None:
     h11 = pytest.importorskip("h11")
     rng = random.Random(seed)
-    pool = [*SEEDS, *(_valid_message(rng) for _ in range(20))]
+    pool = [*SEEDS, *(valid_message(rng) for _ in range(20))]
     seen = {"both": 0, "neither": 0, "bws": 0, "lenient": 0}
     for _ in range(8000):
-        case = _mutate(rng, rng.choice(pool))
-        ours, theirs = _ours(case), _h11(h11, case)
+        case = mutate(rng, rng.choice(pool))
+        ours, theirs = reading(case), _h11(h11, case)
         if ours is not None and theirs is not None:
             assert ours == theirs, case
             seen["both"] += 1
@@ -86,15 +84,15 @@ def test_h11_and_this_decoder_agree_on_valid_messages_without_bws() -> None:
     h11 = pytest.importorskip("h11")
     rng = random.Random(7230)
     for _ in range(3000):
-        case = _valid_message(rng)
-        ours = _ours(case)
+        case = valid_message(rng)
+        ours = reading(case)
         assert ours is not None and ours == _h11(h11, case), case
 
 
 def test_http_client_reads_the_same_body_from_valid_messages() -> None:
     rng = random.Random(2616)
     for _ in range(3000):
-        case = _valid_message(rng)
-        ours = _ours(case)
+        case = valid_message(rng)
+        ours = reading(case)
         assert ours is not None
         assert _http_client(case) == ours[0], case

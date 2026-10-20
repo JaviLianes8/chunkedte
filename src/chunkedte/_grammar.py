@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ._errors import ChunkedError, quote
+from ._errors import QUOTE_LIMIT, ChunkedError, quote
 
 # RFC 9110 section 5.6.2: tchar is any VCHAR except the delimiters.
 TCHAR = rb"!#$%&'*+\-.^_`|~0-9A-Za-z"
@@ -81,5 +81,6 @@ def format_field_line(name: str, value: str) -> bytes:
     if name.lower() in FORBIDDEN_TRAILERS:
         raise ChunkedError(f"{name} cannot be sent as a trailer field")
     if not FIELD_VALUE.fullmatch(raw_value) or raw_value != raw_value.strip(b" \t"):
-        raise ChunkedError(f"invalid trailer value for {quote(name)}: {quote(value)}")
+        shown = name if len(name) <= QUOTE_LIMIT else name[:QUOTE_LIMIT] + "..."
+        raise ChunkedError(f"invalid trailer value for {shown}: {quote(value)}")
     return raw_name + b": " + raw_value
