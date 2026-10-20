@@ -142,9 +142,15 @@ def test_malformed_trailer_lines_are_rejected(line: bytes) -> None:
         decode(b"0\r\n" + line + b"\r\n\r\n")
 
 
-def test_obs_fold_in_trailers_is_rejected_with_a_clear_message() -> None:
+@pytest.mark.parametrize("fold", [b"  b", b"\tb", b" ", b"\t"])
+def test_obs_fold_in_trailers_is_rejected_with_a_clear_message(fold: bytes) -> None:
     with pytest.raises(ChunkedError, match="obsolete line folding"):
-        decode(b"0\r\nX: a\r\n  b\r\n\r\n")
+        decode(b"0\r\nX: a\r\n" + fold + b"\r\n\r\n")
+
+
+@pytest.mark.parametrize("escaped", [b"\\\x80", b"\\\xff", b"\\\t", b"\\ ", b"\\\\"])
+def test_quoted_pairs_escape_obs_text_and_whitespace(escaped: bytes) -> None:
+    assert decode(b'5;a="' + escaped + b'"' + TAIL) == b"hello"
 
 
 @pytest.mark.parametrize(
