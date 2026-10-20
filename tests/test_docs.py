@@ -18,8 +18,9 @@ def _readme() -> str:
     return (ROOT / "README.md").read_text(encoding="utf-8")
 
 
-def _blocks() -> list[str]:
-    return re.findall(r"```python\n(.*?)```", _readme(), flags=re.DOTALL)
+def _blocks(name: str = "README.md") -> list[str]:
+    text = (ROOT / name).read_text(encoding="utf-8")
+    return re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
 
 
 def _comments(block: str) -> list[str]:
@@ -39,6 +40,32 @@ def test_each_example_prints_what_its_comments_show(
     printed = capsys.readouterr().out.splitlines()
     assert printed == _comments(block)
     assert printed
+
+
+def test_the_guide_has_runnable_examples() -> None:
+    assert len(_blocks("GUIDE.md")) == 6
+
+
+@pytest.mark.parametrize("index", range(6))
+def test_each_guide_example_prints_what_its_comments_show(
+    index: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    block = _blocks("GUIDE.md")[index]
+    exec(compile(block, "GUIDE.md", "exec"), {"__name__": "guide"})
+    printed = capsys.readouterr().out.splitlines()
+    assert printed == _comments(block)
+    assert printed
+
+
+def test_every_public_name_appears_in_the_guide() -> None:
+    guide = (ROOT / "GUIDE.md").read_text(encoding="utf-8")
+    for name in chunkedte.__all__:
+        assert f"`{name}" in guide, name
+
+
+def test_readme_links_are_absolute() -> None:
+    for target in re.findall(r"\]\(([^)]+)\)", _readme()):
+        assert target.startswith("https://"), target
 
 
 def test_the_command_line_example_prints_what_the_readme_shows() -> None:

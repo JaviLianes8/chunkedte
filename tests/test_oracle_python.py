@@ -89,6 +89,39 @@ def test_h11_and_this_decoder_agree_on_valid_messages_without_bws() -> None:
         assert ours is not None and ours == _h11(h11, case), case
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        b"+5\r\nhello\r\n0\r\n\r\n",
+        b"0x5\r\nhello\r\n0\r\n\r\n",
+        b"0_5\r\nhello\r\n0\r\n\r\n",
+        b" 5\r\nhello\r\n0\r\n\r\n",
+        b"5\nhello\r\n0\r\n\r\n",
+        b"5\r\nhelloXX0\r\n\r\n",
+    ],
+)
+def test_the_readme_comparison_with_http_client_holds(message: bytes) -> None:
+    assert _http_client(message) == b"hello"
+    assert reading(message) is None
+
+
+@pytest.mark.parametrize(
+    ("message", "trailers"),
+    [
+        (b'5;a b"\r\nhello\r\n0\r\n\r\n', []),
+        (b"5;=x\r\nhello\r\n0\r\n\r\n", []),
+        (b"5\r\nhello\r\n0\r\n\n", []),
+        (b"5\r\nhello\r\n0\r\nA: b\r\n c\r\n\r\n", [("A", "b c")]),
+    ],
+)
+def test_the_readme_comparison_with_h11_holds(
+    message: bytes, trailers: list[tuple[str, str]]
+) -> None:
+    h11 = pytest.importorskip("h11")
+    assert _h11(h11, message) == (b"hello", trailers, len(message))
+    assert reading(message) is None
+
+
 def test_http_client_reads_the_same_body_from_valid_messages() -> None:
     rng = random.Random(2616)
     for _ in range(3000):

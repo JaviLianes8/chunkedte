@@ -36,6 +36,10 @@ unchanged; the changes below only concern wrong argument types and error message
 
 - Every public name, method and property has a docstring with an example that runs as a
   doctest.
+- `GUIDE.md` describes every public name, the grammar, the limits and how other parsers
+  differ; its examples run as tests.
+- Tests against llhttp (the parser inside Node.js) and its own chunked test corpus, `h11`,
+  `http.client` and the 0.2.0 release, run on the same bytes.
 
 ## [0.2.0]
 

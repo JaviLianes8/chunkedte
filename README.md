@@ -1,5 +1,7 @@
 # chunkedte
 
+[![Lianes8 Certified](https://lianes8studio.com/certified/lianes8-certified-badge.svg)](https://lianes8studio.com/certified)
+
 Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding
 (RFC 9112 section 7.1).
 
@@ -141,19 +143,43 @@ Cache-Control) and content format (Content-Type, Content-Encoding, Content-Range
 304 and 2xx to CONNECT carry no body, and an HTTP/1.0 message with Transfer-Encoding has
 faulty framing. There is no lenient mode.
 
+## API and guarantees
+
+Eight names, stable since 1.0.0: `decode`, `Decoder`, `encode`, `Encoder`, `is_chunked`,
+`Limits`, `ChunkedError` and `LimitError`. Wrong argument types raise `TypeError`, every
+problem with the bytes or the fields raises `ChunkedError` (a `ValueError`), and a passed
+bound raises its subclass `LimitError`. Messages quote at most 64 characters of the input.
+The [GUIDE](https://github.com/JaviLianes8/chunkedte/blob/main/GUIDE.md) describes each
+name in detail and the [CHANGELOG](https://github.com/JaviLianes8/chunkedte/blob/main/CHANGELOG.md)
+what changed between releases.
+
 ## Why
 
-Chunked transfer coding is simple to frame and easy to get subtly wrong: the terminating
-`0` chunk, the closing blank line, extensions and trailers are routinely mishandled, and
-the security advisories of the last few years (waitress, h11, aiohttp, netty, Go net/http,
-Node.js) are all variations on a parser accepting bytes another parser reads differently.
-The existing Python options are tied to one HTTP stack (`h11`, `aiohttp`) or to one server.
-This is a standalone, typed, zero-dependency codec with the strict behaviour by default:
-reach for it when you move chunked framing yourself and do not want a whole HTTP stack.
+Chunked transfer coding is simple to frame and easy to get subtly wrong, and every
+leniency is a way for two parsers to disagree on where a message ends. The chunked
+decoders most Python code reaches today sit inside an HTTP stack and are lenient.
+`http.client` in the standard library (checked on CPython 3.13) reads the chunk sizes
+`+5`, `0x5`, `0_5` and ` 5`, ends a size line at a bare LF and skips whatever two bytes
+follow the chunk data. `h11` (checked on 0.16.0) decodes chunks only inside its
+connection object, does not check chunk extensions, accepts a bare LF at the end of the
+trailer section and unfolds obs-fold trailer lines. `chunkedte` is a standalone, typed,
+zero-dependency codec that accepts exactly the RFC 9112 grammar, bounds what a peer can
+make you buffer, and gives you the trailers and the bytes after the message. It is tested
+against the RFC text itself, the llhttp parser inside Node.js and its test corpus, `h11`,
+`http.client` and the 0.2.0 release.
+
+## Development
+
+`python scripts/fetch_upstream.py` downloads RFC 9112, RFC 9110 and the llhttp test files
+listed in `tests/upstream/MANIFEST.json` (they are not part of the repository; their tests
+skip without them). With Node.js on the `PATH` the tests also run llhttp, and with `h11`
+installed they compare against it. Set `CHUNKEDTE_V02` to an unpacked 0.2.0 wheel to
+compare with that release. `scripts/check.ps1` runs format, lint, types and tests. Set
+`CHUNKEDTE_E2E=1` to also build the wheel and sdist and test the installed package.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/JaviLianes8/chunkedte/blob/main/LICENSE).
 
 ## Links
 
