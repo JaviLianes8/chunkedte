@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ._errors import ChunkedError
+from ._errors import ChunkedError, quote
 
 _TOKEN = r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+"
 _QUOTED = r'"(?:[\t \x21\x23-\x5b\x5d-\x7e\x80-\xff]|\\[\t \x21-\x7e\x80-\xff])*"'
@@ -32,8 +32,20 @@ def is_chunked(
 
     The caller still applies the rest of RFC 9112 section 6.3: responses to HEAD, 1xx, 204,
     304 and 2xx to CONNECT have no body, and an HTTP/1.0 message with Transfer-Encoding has
-    faulty framing (section 6.1).
+    faulty framing (section 6.1). Non-``str`` field values raise :class:`TypeError`.
+
+    >>> from chunkedte import ChunkedError, is_chunked
+    >>> is_chunked("gzip, chunked"), is_chunked(None, "12"), is_chunked("gzip", request=False)
+    (True, False, False)
+    >>> try:
+    ...     is_chunked("chunked", "12")
+    ... except ChunkedError as error:
+    ...     print(error)
+    both Transfer-Encoding and Content-Length are present
     """
+    for field in (transfer_encoding, content_length):
+        if field is not None and not isinstance(field, str):
+            raise TypeError(f"field values must be str or None, got {type(field).__name__}")
     if transfer_encoding is None:
         return False
     if content_length is not None:
@@ -59,7 +71,7 @@ def _parse_codings(value: str) -> list[tuple[str, str]]:
     while position < len(value):
         match = _MEMBER.match(value, position)
         if match is None or match.end() == position:
-            raise ChunkedError(f"malformed Transfer-Encoding: {value[:64]!r}")
+            raise ChunkedError(f"malformed Transfer-Encoding: {quote(value)}")
         if match.group(1) is not None:
             codings.append((match.group(1).lower(), match.group(2)))
         position = match.end()

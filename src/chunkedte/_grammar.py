@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ._errors import ChunkedError
+from ._errors import ChunkedError, quote
 
 # RFC 9110 section 5.6.2: tchar is any VCHAR except the delimiters.
 TCHAR = rb"!#$%&'*+\-.^_`|~0-9A-Za-z"
@@ -61,10 +61,10 @@ def parse_field_line(line: bytes) -> tuple[str, str]:
         raise ChunkedError("obsolete line folding in the trailer section")
     match = FIELD_NAME.match(line)
     if match is None:
-        raise ChunkedError(f"malformed trailer field line: {line[:64]!r}")
+        raise ChunkedError(f"malformed trailer field line: {quote(line)}")
     value = line[match.end() :].strip(b" \t")
     if not FIELD_VALUE.fullmatch(value):
-        raise ChunkedError(f"invalid byte in trailer field value: {line[:64]!r}")
+        raise ChunkedError(f"invalid byte in trailer field value: {quote(line)}")
     return line[: match.end() - 1].decode("ascii"), value.decode("latin-1")
 
 
@@ -75,11 +75,11 @@ def format_field_line(name: str, value: str) -> bytes:
     try:
         raw_name, raw_value = name.encode("ascii"), value.encode("latin-1")
     except UnicodeEncodeError:
-        raise ChunkedError(f"trailer field {name!r} is not latin-1 text") from None
+        raise ChunkedError(f"trailer field {quote(name)} is not latin-1 text") from None
     if not TOKEN_RE.fullmatch(raw_name):
-        raise ChunkedError(f"trailer name is not a token: {name!r}")
+        raise ChunkedError(f"trailer name is not a token: {quote(name)}")
     if name.lower() in FORBIDDEN_TRAILERS:
         raise ChunkedError(f"{name} cannot be sent as a trailer field")
     if not FIELD_VALUE.fullmatch(raw_value) or raw_value != raw_value.strip(b" \t"):
-        raise ChunkedError(f"invalid trailer value for {name}: {value!r}")
+        raise ChunkedError(f"invalid trailer value for {quote(name)}: {quote(value)}")
     return raw_name + b": " + raw_value

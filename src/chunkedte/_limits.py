@@ -12,7 +12,19 @@ class Limits:
     ``max_line_size`` bounds one chunk-size line (size plus extensions, CRLF excluded),
     ``max_extensions_size`` the extension bytes of the whole message, ``max_chunk_size`` the
     value of one chunk-size, ``max_body_size`` the decoded body (``None`` for no bound) and
-    ``max_trailer_size`` the trailer field lines including their CRLFs.
+    ``max_trailer_size`` the trailer field lines including their CRLFs. Every bound is a
+    non-negative ``int`` (:class:`TypeError` or :class:`ValueError` otherwise). A size of
+    more than 16 significant hex digits is refused whatever ``max_chunk_size`` says.
+
+    >>> from chunkedte import Decoder, LimitError, Limits
+    >>> limits = Limits(max_body_size=1024)
+    >>> limits.max_body_size, limits.max_line_size
+    (1024, 4096)
+    >>> try:
+    ...     Decoder(limits).feed(b"401\\r\\n")
+    ... except LimitError as error:
+    ...     print(error)
+    body exceeds max_body_size
     """
 
     max_line_size: int = 4096

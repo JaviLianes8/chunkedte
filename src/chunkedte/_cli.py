@@ -8,7 +8,7 @@ from typing import BinaryIO, TextIO
 
 from ._decode import Decoder
 from ._encode import DEFAULT_CHUNK_SIZE, Encoder, encode
-from ._errors import ChunkedError
+from ._errors import ChunkedError, quote
 
 _BLOCK = 65536
 
@@ -83,5 +83,5 @@ def _decode(source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
 def _split_trailer(text: str) -> tuple[str, str]:
     name, colon, value = text.partition(":")
     if not colon:
-        raise ValueError(f"--trailer needs NAME:VALUE, got {text!r}")
+        raise ValueError(f"--trailer needs NAME:VALUE, got {quote(text)}")
     return name, value.strip(" \t")

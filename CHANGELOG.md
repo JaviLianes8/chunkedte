@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-20
+
+The first stable release. The eight public names of 0.2.0 (`ChunkedError`, `Decoder`,
+`Encoder`, `LimitError`, `Limits`, `decode`, `encode`, `is_chunked`), their signatures,
+parameter names and defaults, the default limits and the command line are now stable and
+follow Semantic Versioning. Everything 0.2.0 accepted and produced for valid input is
+unchanged; the changes below only concern wrong argument types and error messages.
+
+### Changed
+
+- `Decoder(limits)` raises `TypeError` when `limits` is not a `Limits` (0.2.0 accepted
+  anything and failed later with `AttributeError`).
+- `Decoder.feed` and `decode` raise `TypeError` for anything but `bytes`, `bytearray` and
+  `memoryview` (0.2.0 also took other buffer objects, such as `array.array`).
+- `is_chunked` raises `TypeError` when a field value is neither `str` nor `None` (0.2.0
+  raised a regular expression `TypeError` for `bytes` and treated any non-`None`
+  Content-Length, such as an `int`, as present).
+- `encode` and `Encoder.finish` raise `TypeError` for a trailer item that is not a
+  two-item tuple or list (0.2.0 raised `ValueError` from unpacking, and split a
+  two-character string into a name and a value).
+- Error messages quote at most 64 characters of the input, followed by `...` when cut.
+  0.2.0 quoted a refused trailer value or name, and a bad `--trailer` argument, in full.
+- The public classes and functions report `chunkedte` as their module, so pickled
+  `Limits` and errors do not depend on private module names.
+- `python -m chunkedte` only runs the tool when executed, not when the module is imported.
+
+### Added
+
+- Every public name, method and property has a docstring with an example that runs as a
+  doctest.
+
 ## [0.2.0]
 
 ### Added
