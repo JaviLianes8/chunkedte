@@ -130,3 +130,8 @@ def test_a_refused_trailer_leaves_the_encoder_open() -> None:
         encoder.finish()
     with pytest.raises(ChunkedError, match="write after finish"):
         encoder.write(b"a")
+
+
+def test_the_package_top_holds_only_the_public_names() -> None:
+    public = sorted(name for name in dir(chunkedte) if not name.startswith("_"))
+    assert public == sorted(chunkedte.__all__)

@@ -31,6 +31,7 @@ unchanged; the changes below only concern wrong argument types and error message
 - The public classes and functions report `chunkedte` as their module, so pickled
   `Limits` and errors do not depend on private module names.
 - `python -m chunkedte` only runs the tool when executed, not when the module is imported.
+- The package top holds only the public names (0.2.0 also exposed a stray `annotations`).
 
 ### Added
 

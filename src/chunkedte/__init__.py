@@ -1,7 +1,5 @@
 """Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding."""
 
-from __future__ import annotations
-
 from ._decode import Decoder
 from ._encode import Encoder, encode
 from ._errors import ChunkedError, LimitError
