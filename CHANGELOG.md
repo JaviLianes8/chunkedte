@@ -109,6 +109,7 @@ change below is listed with what 0.2.0 did.
 
 Not published on PyPI.
 
+### Added
 
 - `encode` frames a byte string as a chunked body split into fixed-size pieces.
 - `Decoder` incrementally decodes chunked bytes fed in any split, ignoring chunk

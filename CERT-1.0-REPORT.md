@@ -14,9 +14,9 @@ Progress:
 - [x] Docs: README, GUIDE, CHANGELOG (items 11, 12)
 - [x] Packaging, e2e and upgrade from PyPI 0.2.0, every Python (items 8, 10, 13, 14)
 - [x] Gates (item 15)
-- [ ] Five QA lenses report PASS (item 19)
-- [ ] Independent reviewer reports PASS (item 16)
-- [ ] PR and trace guard CLEAN (item 17); merge and publish left to the maintainer
+- [x] Five QA lenses report PASS (item 19)
+- [x] Independent reviewer reports PASS (item 16)
+- [x] PR and trace guard CLEAN (item 17); merge and publish left to the maintainer
 
 ## Scorecard
 
@@ -24,23 +24,23 @@ Progress:
 | --- | --- | --- |
 | 1 | Public API reviewed for stability | PASS: the eight names of 0.2.0, signatures, parameter names and defaults kept and pinned; every change in CHANGELOG |
 | 2 | `__all__` exact, no private imports in docs | PASS: the package top holds exactly `__all__` (checked from the installed wheel too) |
-| 3 | Docstrings with runnable examples, doctests | PASS: 14 doctests; README (5 blocks) and GUIDE (6 blocks) run as tests |
+| 3 | Docstrings with runnable examples, doctests | PASS: 22 doctests, run from the source and from the installed wheel; README (5 blocks) and GUIDE (6 blocks) run as tests |
 | 4 | Typed end to end | PASS: `mypy --strict src tests`, `py.typed`, typing checked from a consumer of the installed wheel |
 | 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters and never a trailer value or line (QA round 1) nor a `--trailer` argument without a colon (QA round 2) |
 | 6 | Contract tests of every public name | PASS |
 | 7 | Real ground truth | PASS: RFC 9112 and RFC 9110 fetched, llhttp test corpus fetched, llhttp (Node.js), h11 and http.client run live, PyPI 0.2.0 as an oracle |
 | 8 | Real e2e from the wheel | PASS: installed wheel and CLI driven from an empty folder, consumer type-checked, upgrade in place from PyPI 0.2.0 |
 | 9 | Seeded fuzz, no crash, hang or blowup | PASS |
-| 10 | Supported Pythons | PASS: CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8, 3.14.8t; 3.8 and 3.9 below `requires-python` |
+| 10 | Supported Pythons | PASS: at 899d681, CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8, 3.14.8t; 3.8 and 3.9 below `requires-python` |
 | 11 | README and `twine check` | PASS: `twine check --strict` in the e2e test, absolute links pinned by a test |
 | 12 | Dated CHANGELOG section | PASS: 1.0.0, 2026-10-20 |
 | 13 | pyproject 1.0.0, Production/Stable | PASS |
 | 14 | sdist and wheel contents | PASS: pinned by `tests/test_e2e_wheel.py` |
 | 15 | Gates each exit 0 | PASS: see Gates |
-| 16 | Independent reviewer | pending |
-| 17 | PR and trace guard | PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
+| 16 | Independent reviewer | PASS: round 1 at 899d681, every item PASS (see Independent review) |
+| 17 | PR and trace guard | PASS: PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
 | 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the non-equivalent survivors of lens e's rounds 1 to 5 (7, 11, 6, 5 and 3) now killed |
-| 19 | Five independent QA lenses | rounds 1 to 5 findings fixed (see QA lenses); re-verification of round 5 by lens e pending |
+| 19 | Five independent QA lenses | PASS: all five lenses report PASS (see QA lenses) |
 
 ## Baseline on 0.2.0 (before any change)
 
@@ -138,10 +138,11 @@ The table (mutation, module, the test that killed it) is in `CERT-1.0-MUTATIONS.
   `python -m chunkedte` by subprocess (good input, bad input, exit codes), type-check a
   consumer with `mypy --strict` against the installed wheel, and install 0.2.0 from PyPI,
   then upgrade it in place to the built wheel and run the same program again.
-- Every CPython from `requires-python` up, at d12c212 on Elena's PC (the same minor
+- Every CPython from `requires-python` up, at 899d681 on Elena's PC (run by the independent
+  reviewer; first run at d12c212, before the QA fixes) (the same minor
   versions this PC has, installed there by `uv` in a private folder): the wheel installed
   in a fresh venv and the sdist's own suite run with `src` removed (fetched sources,
-  Node.js llhttp, h11 and the 0.2.0 oracle present), plus the 14 doctests from the
+  Node.js llhttp, h11 and the 0.2.0 oracle present), plus the doctests from the
   installed package: CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8 and 3.14.8
   free-threaded all exit 0 (the three e2e tests need the source tree and run separately,
   above). 3.8 and 3.9 are below `requires-python`. This run found that
@@ -165,7 +166,11 @@ passed and 7 skipped (the 3 wheel e2e and 4 upgrade tests). The source is unchan
 3c84ffb. At e0294eb (the QA round 6 tests) on Elena's PC from a fresh clone of that commit (same
 setup as at 4f14186): `ruff format --check .`, `ruff check .`, `mypy --strict src` and
 `mypy --strict src tests` exit 0 and `pytest` exits 0 with 518 passed and 7 skipped (the
-same 7 opt-in tests). The interpreter matrix (item 10) was last run at d12c212 and is not repeated here.
+same 7 opt-in tests). At 899d681 (the independent review), with the fetched sources, Node.js 24 and 25 llhttp,
+h11, the 0.2.0 oracle, `CHUNKEDTE_E2E=1` and `CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`
+(44 files), `ruff check .` and `mypy --strict src` exit 0, and `pytest` exits 0 with 525
+passed and no skips, on Elena's PC and on the laptop, each from a fresh clone. The
+interpreter matrix (item 10) ran at the same commit (see Packaging).
 
 ## QA lenses (item 19)
 
@@ -199,9 +204,54 @@ survive, with them each is killed by the test named.
 | e-G1 the 64 character cut of a quoted trailer name | `test_a_trailer_name_is_quoted_whole_up_to_64_characters`: a 64 character name is quoted whole and a 65 character name as its first 64 characters plus `...`, in the encoder value error, the decoder value error, the edge whitespace error and the non latin-1 error | R04 (`len(name) < QUOTE_LIMIT`) |
 | e-G2 the offset of a run of non latin-1 characters | `test_a_run_of_non_latin_1_characters_names_the_first_offset`: `"ab€€€cd"` gives `character at offset 2 in the value of trailer field X-Key is not latin-1` | R08 (offset `error.end - 1`) |
 
-Gates at e0294eb are under Gates. Re-verification of round 6 by lens e is pending.
+Gates at e0294eb are under Gates.
+
+Round 7 ran against 899d681: lens e confirmed G1, G2 and the round 5 mutants killed by the
+full suite, and all 10 new mutants of its sweep killed. PASS, nothing new found.
+
+Final verdicts:
+
+| Lens | Rounds | Final verdict | Report | Commit |
+| --- | --- | --- | --- | --- |
+| a. API and docs | 2 | PASS | `lens-a-r2/probes` (probe scripts and outputs) | 276f0e7 |
+| b. Correctness and ground truth | 2 | PASS | `lens-b-r2/probes` and `lens-b-r2/rfc` | 276f0e7 |
+| c. Adversarial and robustness | 4 | PASS | `lens-c-r4/REPORT.md` | ee22527 |
+| d. Packaging and real e2e | 1 | PASS | `lens-d-r1/elena-run.log` | 5a8e4e2 |
+| e. Contract strength | 7 | PASS | `lens-e-r7/REPORT.md` | 899d681 |
+
+The report paths are in the certification work folder, outside the repository. Lenses a and
+b passed at 276f0e7; the source changes after it (8061556, e644142, 4b6b48c, ee22527) were
+re-checked by lenses c and e, and the source is unchanged from ee22527 to 899d681. Lens d
+passed at 5a8e4e2; its checks (wheel and sdist, venvs, CLI by subprocess, upgrade from
+0.2.0, every Python) were run again at 899d681 by the independent reviewer, below.
 
 ### Disputed findings
 
 None.
+
+## Independent review (item 16)
+
+Round 1 at 899d681, from fresh clones on Elena's PC and the laptop, against the 19 items:
+
+| # | Result |
+| --- | --- |
+| 1 | PASS: the eight names, signatures and hints inspected; every 1.0.0 change in the CHANGELOG says what 0.2.0 did; the 0.2.0 oracle tests pass |
+| 2 | PASS: from the installed wheel, `__all__` equals the eight names and `dir()`; no private import in README, GUIDE or CHANGELOG |
+| 3 | PASS: every public name, method and property has an example; 22 doctests pass from the source and from the installed wheel on every interpreter |
+| 4 | PASS: `mypy --strict src` and `mypy --strict src tests` exit 0; `py.typed` ships; `Any` only in `__reduce__` |
+| 5 | PASS: `ChunkedError` is a `ValueError`, `LimitError` a `ChunkedError`; the CLI exits 1 with the documented message; `test_messages` passes |
+| 6 | PASS: contract tests pass; spot mutants killed by direct contracts |
+| 7 | PASS: RFC 9112, RFC 9110 and the two llhttp v9.4.2 corpus files fetched in the run, size and sha256 match `MANIFEST.json`; llhttp live (Node.js 24 and 25), h11, corpus and 0.2.0 oracle tests ran with no skips; `tests/reference.py` labelled hand-written |
+| 8 | PASS: fresh venv from the wheel, `-I` consumer from an empty folder; CLI encode and decode output exact; bad input exits 1, `--chunk-size 0` exits 2; sdist install in a second venv; PyPI 0.2.0 upgraded in place to the wheel |
+| 9 | PASS: fuzz, hostile timing and oracle fuzz tests pass in both full runs |
+| 10 | PASS: CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8 and 3.14.8t exit 0 (wheel installed, sdist suite with `src` removed, doctests); 3.8 and 3.9 below `requires-python` |
+| 11 | PASS: `twine check --strict` with the markdown renderer installed; every link absolute or an in-page anchor |
+| 12 | PASS: `## [1.0.0] - 2026-10-20` with a stability summary |
+| 13 | PASS: version 1.0.0, Production/Stable, 3.10 to 3.14 classifiers, MIT license expression and file, four project URLs, keywords, no runtime dependencies |
+| 14 | PASS: wheel holds 11 modules, `py.typed` and the licence; sdist holds src, tests (only the upstream manifest), scripts, docs, LICENSE and pyproject; no scratch |
+| 15 | PASS: the four gates exit 0; `pytest` 525 passed, no skips, on two machines |
+| 16 | PASS: this review |
+| 17 | PASS: PR #3 open from `release/1.0.0`; merge left to the maintainer after the trace guard |
+| 18 | PASS: 40 author mutants in `CERT-1.0-MUTATIONS.md`; 4 spot mutants of the reviewer all killed |
+| 19 | PASS: the five lens reports and probe folders exist and match their verdicts |
 
