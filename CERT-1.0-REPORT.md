@@ -162,7 +162,10 @@ round 5 tests) on Elena's PC from a fresh clone of that commit (CPython 3.14, fe
 sources and h11, without the opt-in e2e and 0.2.0 oracle variables): `ruff format
 --check .`, `ruff check .` and `mypy --strict src` exit 0 and `pytest` exits 0 with 515
 passed and 7 skipped (the 3 wheel e2e and 4 upgrade tests). The source is unchanged since
-3c84ffb. The interpreter matrix (item 10) was last run at d12c212 and is not repeated here.
+3c84ffb. At e0294eb (the QA round 6 tests) on Elena's PC from a fresh clone of that commit (same
+setup as at 4f14186): `ruff format --check .`, `ruff check .`, `mypy --strict src` and
+`mypy --strict src tests` exit 0 and `pytest` exits 0 with 518 passed and 7 skipped (the
+same 7 opt-in tests). The interpreter matrix (item 10) was last run at d12c212 and is not repeated here.
 
 ## QA lenses (item 19)
 
@@ -179,23 +182,24 @@ Round 3 ran against 8061556: lens c reported N2 and lens e reported F1 to F4, al
 Round 4 ran against ee22527: lens c reported PASS and lens e reported E1 to E5, all
 missing contracts, pinned in 3c84ffb. The table is in `CERT-1.0-QA.md`.
 
-Round 5 ran against a4a811d (the source is unchanged since ee22527). Lens e confirmed its
-round 4 mutants Q03, Q07, Q17, Q23 and Q32 killed by the full suite, ran 10 new mutants
-(S01 to S10) on `_check_name` and `format_field_line`, and reported the 3 survivors as F1
-to F3 (none equivalent). None is a behaviour bug: each was a missing contract, so the code
-and the CHANGELOG are unchanged. All are pinned in 4f14186, and the new tests pass on
-a4a811d. Each named mutant was re-applied alone to a copy of the tree at 4f14186 and was
-killed by the test named; the unmutated copy passed.
+Round 5 ran against a4a811d: lens e reported F1 to F3, all missing contracts, pinned in
+4f14186. The table is in `CERT-1.0-QA.md`.
 
-| Finding | Contract added (exact message, `in a trailer field name`) | Mutant killed |
+Round 6 ran against bc53054 (the source is unchanged since ee22527). Lens e confirmed its
+round 5 mutants S01, S03 and S04 killed by the full suite, ran 10 new mutants (R01 to R10)
+on `_check_name`, `format_field_line` and `_shown`, and reported the 2 survivors as G1 and
+G2 (none equivalent). None is a behaviour bug: each was a missing contract, so the code and
+the CHANGELOG are unchanged. Both are pinned in e0294eb (`tests/test_messages.py`), and the
+new tests pass on bc53054. Each named mutant was re-applied alone to a copy of the source
+and run against `tests/test_messages.py` with and without the new tests: without them both
+survive, with them each is killed by the test named.
+
+| Finding | Contract added (exact message) | Mutant killed |
 | --- | --- | --- |
-| e-F1 no refused name longer than about 71 characters | `test_cli_trailers::test_a_very_long_trailer_name_is_checked_to_its_end`: `"X" * 100_000 + " tail"` gives `invalid byte 0x20 at offset 100000`; `"X" * 100_000 + "\u00e9"` gives `non-ASCII character U+00E9 at offset 100000` | S01 (`_check_name(name[:1024])`) |
-| e-F2 an underscore before the bad byte | `X_Y Z`: `invalid byte 0x20 at offset 3`, added to `test_the_whole_trailer_name_is_checked_before_anything_else` | S03 (per-character check without `_`) |
-| e-F3 DEL in a name | `"X\x7f"`: `invalid byte 0x7f at offset 1`, same test | S04 (`ord(char) >= 0x7F` as the non-ASCII test) |
+| e-G1 the 64 character cut of a quoted trailer name | `test_a_trailer_name_is_quoted_whole_up_to_64_characters`: a 64 character name is quoted whole and a 65 character name as its first 64 characters plus `...`, in the encoder value error, the decoder value error, the edge whitespace error and the non latin-1 error | R04 (`len(name) < QUOTE_LIMIT`) |
+| e-G2 the offset of a run of non latin-1 characters | `test_a_run_of_non_latin_1_characters_names_the_first_offset`: `"ab€€€cd"` gives `character at offset 2 in the value of trailer field X-Key is not latin-1` | R08 (offset `error.end - 1`) |
 
-The long names are built inside their own test, not passed as parameters: a 100,000
-character parameter id does not fit in the `PYTEST_CURRENT_TEST` environment variable on
-Windows. Gates at 4f14186 are under Gates. Re-verification of round 5 by lens e is pending.
+Gates at e0294eb are under Gates. Re-verification of round 6 by lens e is pending.
 
 ### Disputed findings
 

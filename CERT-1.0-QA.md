@@ -1,4 +1,4 @@
-# chunkedte 1.0.0 QA rounds 1 to 4
+# chunkedte 1.0.0 QA rounds 1 to 5
 
 QA round 1 of item 19 in `CERT-1.0-REPORT.md`, against 5a8e4e2, fixed in 099ef17: each
 finding, its fix and the test that pins it. Tests named without a file are in
@@ -97,3 +97,25 @@ killed by that test.
 | e-E5 the name check runs before the forbidden list | Kelvin sign `\u212aeep-alive` (lower-cases to `keep-alive`): `non-ASCII character U+212A at offset 0`, not the forbidden message | Q32 |
 
 Gates at 3c84ffb: 518 passed. Lens e confirmed every round 4 fix in round 5.
+
+## Round 5
+
+Round 5 ran against a4a811d (the source is unchanged since ee22527). Lens e confirmed its
+round 4 mutants Q03, Q07, Q17, Q23 and Q32 killed by the full suite, ran 10 new mutants
+(S01 to S10) on `_check_name` and `format_field_line`, and reported the 3 survivors as F1
+to F3 (none equivalent). None is a behaviour bug: each was a missing contract, so the code
+and the CHANGELOG are unchanged. All are pinned in 4f14186, and the new tests pass on
+a4a811d. Each named mutant was re-applied alone to a copy of the tree at 4f14186 and was
+killed by the test named; the unmutated copy passed.
+
+| Finding | Contract added (exact message, `in a trailer field name`) | Mutant killed |
+| --- | --- | --- |
+| e-F1 no refused name longer than about 71 characters | `test_cli_trailers::test_a_very_long_trailer_name_is_checked_to_its_end`: `"X" * 100_000 + " tail"` gives `invalid byte 0x20 at offset 100000`; `"X" * 100_000 + "\u00e9"` gives `non-ASCII character U+00E9 at offset 100000` | S01 (`_check_name(name[:1024])`) |
+| e-F2 an underscore before the bad byte | `X_Y Z`: `invalid byte 0x20 at offset 3`, added to `test_the_whole_trailer_name_is_checked_before_anything_else` | S03 (per-character check without `_`) |
+| e-F3 DEL in a name | `"X\x7f"`: `invalid byte 0x7f at offset 1`, same test | S04 (`ord(char) >= 0x7F` as the non-ASCII test) |
+
+The long names are built inside their own test, not passed as parameters: a 100,000
+character parameter id does not fit in the `PYTEST_CURRENT_TEST` environment variable on
+Windows.
+
+Gates at 4f14186: 515 passed, 7 skipped. Lens e confirmed every round 5 fix in round 6.
