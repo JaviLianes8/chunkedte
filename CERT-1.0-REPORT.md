@@ -48,21 +48,15 @@ On this PC, CPython 3.13.2, at cb5707c: `ruff format --check .`, `ruff check .` 
 `mypy --strict src tests` exit 0; `pytest` 282 passed, 1 skipped (the installed-wheel
 test, which needs `CHUNKEDTE_E2E=1`); no doctests existed.
 
-Defects found in 0.2.0 by reading and then reproducing:
-
-- `Decoder(5)` was accepted and failed later, at the first `feed`, with `AttributeError`.
-- `is_chunked(b"chunked")` raised a regular expression `TypeError`; `is_chunked("chunked", 5)`
-  read the `int` as a present Content-Length.
-- `encode(b"x", trailers=["ab"])` sent a trailer `a: b`; a three-item pair raised
-  `ValueError` from unpacking instead of a `TypeError`.
-- Error messages quoted a refused trailer value in full: a 200,000 character value gave a
-  500,031 character `ChunkedError` message; the same for a non-token trailer name and a
-  bad `--trailer` argument.
-- The public classes reported private modules (`chunkedte._errors.ChunkedError`), so a
-  pickle depended on them; `chunkedte/__main__.py` ran the tool when imported (doctest
-  collection would have hung on stdin); the package top exposed a stray `annotations`.
-- No public docstring had a runnable example; the README linked LICENSE relatively,
-  which breaks on PyPI; there was no GUIDE.
+Defects found in 0.2.0 by reading and then reproducing: `Decoder(5)` was accepted and
+failed later with `AttributeError`; `is_chunked(b"chunked")` raised a regular expression
+`TypeError` and `is_chunked("chunked", 5)` read the `int` as a present Content-Length;
+`encode(b"x", trailers=["ab"])` sent a trailer `a: b`; a 200,000 character trailer value
+gave a 500,031 character error message (also a non-token name and a bad `--trailer`);
+public classes reported private modules, so pickles depended on them; importing
+`chunkedte.__main__` ran the tool; the package top exposed a stray `annotations`; no
+docstring had a runnable example, the README linked LICENSE relatively and there was no
+GUIDE.
 
 ## API review (item 1)
 
