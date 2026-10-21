@@ -100,9 +100,11 @@ class Decoder:
     def feed(self, data: bytes | bytearray | memoryview) -> list[bytes]:
         """Append ``data`` and return every decoded body piece now available.
 
-        Raises :class:`ChunkedError` (or its subclass :class:`LimitError`) on the first
-        byte that breaks the grammar or a limit, and :class:`TypeError` for data that is
-        not ``bytes``, ``bytearray`` or ``memoryview``.
+        Raises :class:`ChunkedError` once a size or trailer line that breaks the grammar
+        is complete (the CRLF after chunk data is checked byte by byte), and
+        :class:`LimitError` as soon as a bound is certain to be passed; the error class
+        never depends on how the input is split. Data that is not ``bytes``,
+        ``bytearray`` or ``memoryview`` raises :class:`TypeError`.
 
         >>> from chunkedte import Decoder
         >>> Decoder().feed(b"3\\r\\nabc\\r\\n2\\r\\nde\\r\\n")
@@ -111,6 +113,8 @@ class Decoder:
         require_bytes(data)
         if self._error is not None:
             raise ChunkedError(f"the decoder already failed: {self._error}")
+        if isinstance(data, memoryview) and not data.contiguous:  # ValueError when released
+            data = data.tobytes()  # bytearray cannot append a strided view
         self._buffer += data
         out: list[bytes] = []
         try:

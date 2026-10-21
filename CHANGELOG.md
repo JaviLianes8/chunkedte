@@ -11,8 +11,8 @@ All notable changes to this project are documented here. The format follows
 The first stable release. The eight public names of 0.2.0 (`ChunkedError`, `Decoder`,
 `Encoder`, `LimitError`, `Limits`, `decode`, `encode`, `is_chunked`), their signatures,
 parameter names and defaults, the default limits and the command line are now stable and
-follow Semantic Versioning. Everything 0.2.0 accepted and produced for valid input is
-unchanged; the changes below only concern wrong argument types and error messages.
+follow Semantic Versioning. Every message 0.2.0 decoded is decoded the same way; each
+change below is listed with what 0.2.0 did.
 
 ### Changed
 
@@ -28,8 +28,35 @@ unchanged; the changes below only concern wrong argument types and error message
   two-character string into a name and a value).
 - Error messages quote at most 64 characters of the input, followed by `...` when cut.
   0.2.0 quoted a refused trailer value or name, and a bad `--trailer` argument, in full.
-- The public classes and functions report `chunkedte` as their module, so pickled
-  `Limits` and errors do not depend on private module names.
+- Error messages never quote a trailer value or a whole trailer line, which can hold
+  credentials: they name the field, the first bad byte in hex and its offset (`invalid
+  byte 0x00 at offset 7 in the value of trailer field Authorization`). 0.2.0 quoted the
+  value or the line.
+- A non-ASCII trailer name is reported as `trailer name is not a token` (0.2.0 said it
+  was not latin-1 text, which was wrong for names such as `ñ`).
+- Pickles of `Limits`, `ChunkedError` and `LimitError` name only `chunkedte`, never the
+  private module that defines the class. The classes still report that module, so
+  `inspect.getsource`, IDEs and documentation tools find their source; the functions and
+  methods report `chunkedte`.
+- `is_chunked` raises `TypeError` when `request` is not a `bool` (0.2.0 read any value by
+  truth, so `request=None` meant a response).
+- `is_chunked` returns `False` for a response whose Transfer-Encoding lists no coding
+  (`""`, `","`): RFC 9110 allows the empty list and RFC 9112 section 6.3 reads such a
+  response until the connection closes. 0.2.0 raised `ChunkedError`; a request still
+  raises.
+- The encoder refuses the conditional request fields `If-Match`, `If-None-Match`,
+  `If-Modified-Since`, `If-Unmodified-Since` and `If-Range` as trailers (RFC 9110
+  sections 6.5.1 and 13); 0.2.0 sent them.
+- A line that passes its limit raises `LimitError` whatever split it arrived in. 0.2.0
+  raised `ChunkedError` for a bare LF when the whole line came in one `feed`, and
+  `LimitError` when it came in pieces.
+- `Decoder.feed` and `decode` read a strided `memoryview` as its bytes (0.2.0 raised
+  `TypeError`), and a released one raises `ValueError`, as `encode` does.
+- `chunkedte encode` treats a `--chunk-size` below 1 as a usage error, exit status 2,
+  like a non-integer one (0.2.0 exited 1 for `0`). It reads at most 64 KiB at a time and
+  fills every chunk but the last to `--chunk-size` even from short reads (0.2.0 asked for
+  `--chunk-size` bytes per read, so a huge value crashed with `OverflowError` or
+  `MemoryError`, and a short read gave a short chunk).
 - `python -m chunkedte` only runs the tool when executed, not when the module is imported.
 - The package top holds only the public names (0.2.0 also exposed a stray `annotations`).
 
@@ -42,7 +69,7 @@ unchanged; the changes below only concern wrong argument types and error message
 - Tests against llhttp (the parser inside Node.js) and its own chunked test corpus, `h11`,
   `http.client` and the 0.2.0 release, run on the same bytes.
 
-## [0.2.0]
+## [0.2.0] - 2026-10-19
 
 ### Added
 
@@ -69,7 +96,10 @@ unchanged; the changes below only concern wrong argument types and error message
 - Lines split over many reads are scanned once, so decoding is linear in the input.
 - `encode` rejects a non-int `chunk_size` and non bytes-like data with `TypeError`.
 
-## [0.1.0]
+## [0.1.0] - 2026-10-11
+
+Not published on PyPI.
+
 
 - `encode` frames a byte string as a chunked body split into fixed-size pieces.
 - `Decoder` incrementally decodes chunked bytes fed in any split, ignoring chunk

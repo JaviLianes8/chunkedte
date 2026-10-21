@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import astuple, dataclass, fields
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -43,3 +44,10 @@ class Limits:
                 raise TypeError(f"{field.name} must be an int, got {type(value).__name__}")
             if value < 0:
                 raise ValueError(f"{field.name} must not be negative")
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        if type(self) is not Limits:
+            return super().__reduce__()
+        from . import _restore
+
+        return _restore, ("Limits", astuple(self))

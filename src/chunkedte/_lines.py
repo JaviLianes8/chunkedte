@@ -21,10 +21,12 @@ def take_line(buffer: bytearray, scanned: int, limit: int, what: str) -> tuple[b
         if len(buffer) > limit + 1:
             raise LimitError(f"{what} exceeds its limit")
         return None, len(buffer)
+    # The length first, as in the branch above: a line fed byte by byte would have passed
+    # the limit before its LF arrived, so the error must not depend on the split.
+    if end > limit + 1:
+        raise LimitError(f"{what} exceeds its limit")
     if end == 0 or buffer[end - 1] != _CR:
         raise ChunkedError(f"bare LF in the {what}")
-    if end - 1 > limit:
-        raise LimitError(f"{what} exceeds its limit")
     line = bytes(buffer[: end - 1])
     del buffer[: end + 1]
     if _CR in line:

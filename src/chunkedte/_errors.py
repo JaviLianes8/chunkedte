@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 # Error messages quote at most this many characters of the offending input, so a hostile
 # megabyte never ends up in a log line.
 QUOTE_LIMIT = 64
@@ -19,6 +21,13 @@ class ChunkedError(ValueError):
     ...     print(error)
     bare LF in the chunk-size line
     """
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        if type(self) not in (ChunkedError, LimitError):
+            return super().__reduce__()
+        from . import _restore
+
+        return _restore, (type(self).__name__, self.args), self.__dict__ or None
 
 
 class LimitError(ChunkedError):

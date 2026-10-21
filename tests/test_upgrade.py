@@ -40,10 +40,19 @@ def old() -> ModuleType:
     return module
 
 
+def _reworded(message: str) -> bool:
+    # 1.0.0 no longer quotes trailer values or lines: it names the field, byte and offset.
+    if message.endswith("cannot be sent as a trailer field"):
+        return False
+    return any(part in message for part in ("trailer field", "trailer value", "trailer name"))
+
+
 def _outcome(call: Callable[[], Any]) -> object:
     try:
         return ("ok", call())
     except Exception as error:
+        if _reworded(str(error)):
+            return (type(error).__name__, "a trailer field message")
         # 1.0.0 marks a quote it cut; 0.2.0 cut the same 64 characters silently.
         return (type(error).__name__, str(error).removesuffix("..."))
 
@@ -88,6 +97,10 @@ def test_encoding_and_is_chunked_are_unchanged(old: ModuleType) -> None:
         te = rng.choice([None, ", ".join(rng.choice(codings) for _ in range(rng.randint(0, 3)))])
         cl = rng.choice([None, "12", ""])
         request = rng.random() < 0.5
+        if te is not None and cl is None and not request and not te.strip(" \t,"):
+            # 1.0.0 reads a response that lists no coding to close, as RFC 9112 6.3 says.
+            assert chunkedte.is_chunked(te, cl, request=request) is False
+            continue
         assert _outcome(lambda: old.is_chunked(te, cl, request=request)) == (  # noqa: B023
             _outcome(lambda: chunkedte.is_chunked(te, cl, request=request))  # noqa: B023
         ), (te, cl, request)
@@ -101,12 +114,33 @@ def test_the_documented_changes_and_nothing_else(old: ModuleType) -> None:
         ("int length", lambda m: m.is_chunked("chunked", 5)),
         ("str pair", lambda m: m.encode(b"", trailers=["ab"])),
         ("long pair", lambda m: m.encode(b"", trailers=[("a", "b", "c")])),
+        ("request None", lambda m: m.is_chunked("gzip", request=None)),
     ]
     for label, call in changed:
         before, after = _outcome(lambda: call(old)), _outcome(lambda: call(chunkedte))  # noqa: B023
         assert after[0] == "TypeError" and before != after, (label, before, after)  # type: ignore[index]
     long_value = {"A": "\x00" * 1000}
-    before = _outcome(lambda: old.encode(b"", trailers=long_value))
-    after = _outcome(lambda: chunkedte.encode(b"", trailers=long_value))
-    assert before[0] == after[0] == "ChunkedError"  # type: ignore[index]
-    assert len(str(after[1])) < 400 < len(str(before[1]))  # type: ignore[index]
+    messages = []
+    for module in (old, chunkedte):
+        with pytest.raises(module.ChunkedError) as caught:
+            module.encode(b"", trailers=long_value)
+        messages.append(str(caught.value))
+    assert len(messages[1]) < 400 < len(messages[0])
+
+
+def test_the_round_one_changes(old: ModuleType) -> None:
+    strided = memoryview(b"1\x00\r\x00\n\x00a\x00\r\x00\n\x000\x00\r\x00\n\x00\r\x00\n\x00")[::2]
+    cases: list[tuple[Callable[[ModuleType], Any], object, object]] = [
+        (lambda m: m.is_chunked(" , ", request=False), "ChunkedError", ("ok", False)),
+        (lambda m: m.encode(b"", trailers={"If-Match": "x"}), "ok", "ChunkedError"),
+        (lambda m: m.decode(strided), "TypeError", ("ok", b"a")),
+        (
+            lambda m: m.Decoder(m.Limits(max_line_size=4)).feed(b"123456\n"),
+            "ChunkedError",
+            "LimitError",
+        ),
+    ]
+    for call, before, after in cases:
+        was, now = _outcome(lambda: call(old)), _outcome(lambda: call(chunkedte))  # noqa: B023
+        assert was[0] == before, was  # type: ignore[index]
+        assert (now if isinstance(after, tuple) else now[0]) == after, now  # type: ignore[index]

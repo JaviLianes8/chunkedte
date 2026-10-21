@@ -1,5 +1,7 @@
 """Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding."""
 
+from collections.abc import Callable as _Callable
+
 from ._decode import Decoder
 from ._encode import Encoder, encode
 from ._errors import ChunkedError, LimitError
@@ -9,14 +11,35 @@ from ._oneshot import decode
 
 __version__ = "1.0.0"
 
-# The public names show and pickle as chunkedte.<Name>, so a pickle never depends on the
-# private module that defines them. Methods follow, so doctest finds their examples here.
-for _public in (ChunkedError, Decoder, Encoder, LimitError, Limits, decode, encode, is_chunked):
-    _public.__module__ = __name__
-    for _member in vars(_public).values():
-        if callable(_member) and str(getattr(_member, "__module__", "")).startswith(__name__):
-            _member.__module__ = __name__
-del _public, _member
+# Classes keep the module that defines them, so inspect and IDEs find their source, and
+# their pickles go through _restore. Functions and methods report the package, and the
+# classes are listed in __test__, so doctest finds every example from here.
+for _function in (decode, encode, is_chunked):
+    _function.__module__ = __name__
+for _member in [*vars(Decoder).values(), *vars(Encoder).values()]:
+    if callable(_member) and str(getattr(_member, "__module__", "")).startswith(__name__):
+        _member.__module__ = __name__
+del _function, _member
+
+__test__: dict[str, type] = {
+    "ChunkedError": ChunkedError,
+    "Decoder": Decoder,
+    "Encoder": Encoder,
+    "LimitError": LimitError,
+    "Limits": Limits,
+}
+
+_PICKLED: dict[str, _Callable[..., object]] = {
+    "ChunkedError": ChunkedError,
+    "LimitError": LimitError,
+    "Limits": Limits,
+}
+
+
+def _restore(name: str, args: tuple[object, ...]) -> object:
+    # A pickle names this function and a public class, never a private module.
+    return _PICKLED[name](*args)
+
 
 __all__ = [
     "ChunkedError",

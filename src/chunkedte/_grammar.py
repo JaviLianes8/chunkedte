@@ -23,11 +23,13 @@ SIZE_LINE = re.compile(rb"([0-9A-Fa-f]+)(" + CHUNK_EXT + rb")")
 FIELD_NAME = re.compile(TOKEN + rb":")
 # RFC 9110 section 5.5: field-vchar, SP and HTAB; the ends are checked by stripping OWS.
 FIELD_VALUE = re.compile(rb"[\t \x21-\x7e\x80-\xff]*")
+NOT_FIELD_VALUE = re.compile(rb"[^\t \x21-\x7e\x80-\xff]")
 TOKEN_RE = re.compile(TOKEN)
 
 # Fields needed before the content (framing, routing, connection control, authentication,
-# request modifiers, response controls, content format: RFC 9110 section 6.5.1) cannot be
-# sent as trailers, so the encoder refuses them.
+# request modifiers including the conditionals of RFC 9110 section 13, response controls,
+# content format: RFC 9110 section 6.5.1) cannot be sent as trailers, so the encoder
+# refuses them.
 FORBIDDEN_TRAILERS = frozenset(
     {
         "authorization",
@@ -40,6 +42,11 @@ FORBIDDEN_TRAILERS = frozenset(
         "cookie",
         "expect",
         "host",
+        "if-match",
+        "if-modified-since",
+        "if-none-match",
+        "if-range",
+        "if-unmodified-since",
         "keep-alive",
         "max-forwards",
         "proxy-authenticate",
@@ -61,26 +68,48 @@ def parse_field_line(line: bytes) -> tuple[str, str]:
         raise ChunkedError("obsolete line folding in the trailer section")
     match = FIELD_NAME.match(line)
     if match is None:
-        raise ChunkedError(f"malformed trailer field line: {quote(line)}")
+        # Never quote the line: a value, or a name and value without a colon, can be a secret.
+        token = TOKEN_RE.match(line)
+        at = token.end() if token else 0
+        if at == len(line):
+            raise ChunkedError("trailer field line has no colon")
+        if at == 0 and line[:1] == b":":
+            raise ChunkedError("empty trailer field name")
+        raise ChunkedError(f"invalid byte 0x{line[at]:02x} at offset {at} in a trailer field name")
+    name = line[: match.end() - 1].decode("ascii")
     value = line[match.end() :].strip(b" \t")
-    if not FIELD_VALUE.fullmatch(value):
-        raise ChunkedError(f"invalid byte in trailer field value: {quote(line)}")
-    return line[: match.end() - 1].decode("ascii"), value.decode("latin-1")
+    _check_value(name, value)
+    return name, value.decode("latin-1")
 
 
 def format_field_line(name: str, value: str) -> bytes:
     """Validate one trailer field for sending and return ``name: value`` as bytes."""
     if not isinstance(name, str) or not isinstance(value, str):
         raise TypeError("trailer names and values must be str")
-    try:
-        raw_name, raw_value = name.encode("ascii"), value.encode("latin-1")
-    except UnicodeEncodeError:
-        raise ChunkedError(f"trailer field {quote(name)} is not latin-1 text") from None
-    if not TOKEN_RE.fullmatch(raw_name):
+    if not name.isascii() or not TOKEN_RE.fullmatch(name.encode("ascii")):
         raise ChunkedError(f"trailer name is not a token: {quote(name)}")
     if name.lower() in FORBIDDEN_TRAILERS:
         raise ChunkedError(f"{name} cannot be sent as a trailer field")
-    if not FIELD_VALUE.fullmatch(raw_value) or raw_value != raw_value.strip(b" \t"):
-        shown = name if len(name) <= QUOTE_LIMIT else name[:QUOTE_LIMIT] + "..."
-        raise ChunkedError(f"invalid trailer value for {shown}: {quote(value)}")
-    return raw_name + b": " + raw_value
+    try:
+        raw_value = value.encode("latin-1")
+    except UnicodeEncodeError as error:
+        where = f"offset {error.start} in the value of trailer field {_shown(name)}"
+        raise ChunkedError(f"character at {where} is not latin-1") from None
+    _check_value(name, raw_value)
+    if raw_value != raw_value.strip(b" \t"):
+        raise ChunkedError(
+            f"whitespace at the start or end of the value of trailer field {_shown(name)}"
+        )
+    return name.encode("ascii") + b": " + raw_value
+
+
+def _check_value(name: str, value: bytes) -> None:
+    # Values can carry credentials, so the message gives the first bad byte, never the value.
+    bad = NOT_FIELD_VALUE.search(value)
+    if bad is not None:
+        where = f"offset {bad.start()} in the value of trailer field {_shown(name)}"
+        raise ChunkedError(f"invalid byte 0x{value[bad.start()]:02x} at {where}")
+
+
+def _shown(name: str) -> str:
+    return name if len(name) <= QUOTE_LIMIT else name[:QUOTE_LIMIT] + "..."

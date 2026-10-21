@@ -20,6 +20,10 @@ CASES: dict[str, Callable[[], object]] = {
     "trailer value": lambda: decode(b"0\r\nA: " + b"\x00" * BIG + b"\r\n\r\n", limits=LOOSE),
     "encoder name": lambda: encode(b"", trailers={"(" * BIG: "v"}),
     "encoder value": lambda: encode(b"", trailers={"A": "\x00" * BIG}),
+    "encoder value, huge name": lambda: encode(b"", trailers={"X" * BIG: "a\x00"}),
+    "decoder value, huge name": lambda: decode(
+        b"0\r\n" + b"X" * BIG + b": a\x00\r\n\r\n", limits=LOOSE
+    ),
     "encoder edge whitespace": lambda: Encoder().finish({"A": " " * BIG}),
     "encoder non latin-1 name": lambda: encode(b"", trailers={"€" * BIG: "v"}),
     "transfer-encoding": lambda: is_chunked("x" * BIG + "\x00"),

@@ -76,9 +76,15 @@ def test_malformed_field_values_are_errors(value: str) -> None:
 
 
 @pytest.mark.parametrize("value", ["", " ", ",", " , ,"])
-def test_a_field_without_codings_is_an_error(value: str) -> None:
+def test_a_request_field_without_codings_is_an_error(value: str) -> None:
     with pytest.raises(ChunkedError, match="no transfer coding"):
-        is_chunked(value, request=False)
+        is_chunked(value)
+
+
+@pytest.mark.parametrize("value", ["", " ", ",", " , ,"])
+def test_a_response_field_without_codings_is_read_to_close(value: str) -> None:
+    # RFC 9110 section 5.6.1: an empty list is valid, and chunked is not its final coding.
+    assert is_chunked(value, request=False) is False
 
 
 def test_a_non_str_value_is_a_type_error() -> None:

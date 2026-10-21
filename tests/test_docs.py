@@ -68,13 +68,29 @@ def test_readme_links_are_absolute() -> None:
         assert target.startswith("https://"), target
 
 
+def _od_c(lines: list[str]) -> bytes:
+    # od -c: a 7-digit offset, then one byte per 4 columns, right-aligned.
+    escapes = {"\\r": "\r", "\\n": "\n", "": " "}
+    cells = [line[7 + at : 11 + at].strip() for line in lines for at in range(0, len(line) - 7, 4)]
+    return "".join(escapes.get(cell, cell) for cell in cells).encode()
+
+
 def test_the_command_line_example_prints_what_the_readme_shows() -> None:
-    shown = re.search(r"\| chunkedte decode\n(.*?)\n(.*?)\n", _readme())
-    assert shown is not None
+    session = re.search(r"\n\$ printf '(.*?)' > message.bin\n(.*?)```", _readme(), re.DOTALL)
+    assert session is not None
+    message = session[1].replace("\\r", "\r").replace("\\n", "\n").encode()
+    shown = session[2].splitlines()
+    assert shown[0].endswith("decode message.bin 2>/dev/null; echo")
+    assert shown[2].endswith("decode message.bin 2>&1 >/dev/null")
+    assert shown[4].startswith("$ printf 'abc' | chunkedte encode --chunk-size 2 --trailer")
     out, err = io.BytesIO(), io.StringIO()
-    code = main(["decode"], io.BytesIO(b"5\r\nhello\r\n0\r\nX-Sum: 1\r\n\r\n"), out, err)
-    assert code == 0
-    assert [out.getvalue().decode(), err.getvalue().strip()] == [shown[1], shown[2]]
+    assert main(["decode"], io.BytesIO(message), out, err) == 0
+    assert (out.getvalue().decode(), err.getvalue()) == (shown[1], shown[3] + "\n")
+    out = io.BytesIO()
+    argv = ["encode", "--chunk-size", "2", "--trailer", "X-Sum: 1"]
+    assert main(argv, io.BytesIO(b"abc"), out, io.StringIO()) == 0
+    assert out.getvalue() == _od_c(shown[5:7])
+    assert shown[7] == f"{len(out.getvalue()):07o}"
 
 
 def test_every_public_name_appears_in_the_readme() -> None:

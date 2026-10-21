@@ -57,9 +57,9 @@ def test_limits_is_a_frozen_dataclass_with_pinned_fields_that_pickles() -> None:
     assert hash(limits) == hash(Limits(max_body_size=5))
 
 
-def test_public_names_report_the_package_as_their_module() -> None:
-    for name in chunkedte.__all__:
-        assert getattr(chunkedte, name).__module__ == "chunkedte", name
+def test_functions_and_methods_report_the_package_and_pickles_name_only_it() -> None:
+    for function in (decode, encode, is_chunked, Decoder.feed, Encoder.write, Encoder.finish):
+        assert function.__module__ == "chunkedte", function
     error = pickle.loads(pickle.dumps(LimitError("body exceeds max_body_size")))
     assert (type(error), str(error)) == (LimitError, "body exceeds max_body_size")
     assert b"chunkedte._" not in pickle.dumps(ChunkedError("x")) + pickle.dumps(Limits())
@@ -104,7 +104,10 @@ def test_is_chunked_refuses_field_values_that_are_not_str(te: object, cl: object
         is_chunked(te, cl)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("trailers", [["ab"], [("a", "b", "c")], [("a",)], [5], "ab", b"ab"])
+@pytest.mark.parametrize(
+    "trailers",
+    [["ab"], [("a", "b", "c")], [("a",)], [5], "ab", b"ab", "", b"", bytearray(), memoryview(b"")],
+)
 def test_trailers_must_be_a_mapping_or_pairs(trailers: object) -> None:
     with pytest.raises(TypeError, match="mapping or"):
         encode(b"", trailers=trailers)  # type: ignore[arg-type]

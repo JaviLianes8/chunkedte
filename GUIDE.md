@@ -18,9 +18,12 @@ the rest of its chunk.
   section 6.5.2 says not to): a `Content-Length` trailer must never reach your framing.
 - `unused_data` holds the bytes after the message, for example a pipelined request. Bytes
   fed after completion are added there and nothing else happens.
-- The first byte that breaks the grammar raises `ChunkedError`; a passed bound raises
-  `LimitError`. The pieces decoded during that call are dropped with it, and every later
-  `feed` raises `ChunkedError` again, so a broken stream cannot be resumed by accident.
+- A size line or trailer line that breaks the grammar raises `ChunkedError` once the line
+  is complete (its CRLF has arrived); the CRLF after chunk data is checked byte by byte.
+  A bound raises `LimitError` as soon as it is certain to be passed, so a line is never
+  buffered past its limit. The error class is the same whatever split the bytes arrive
+  in. The pieces decoded during that call are dropped with it, and every later `feed`
+  raises `ChunkedError` again, so a broken stream cannot be resumed by accident.
 
 ```python
 from chunkedte import ChunkedError, Decoder
@@ -151,8 +154,11 @@ at its ends. Fields that RFC 9110 section 6.5.1 needs before the content are ref
 framing and routing (`Content-Length`, `Transfer-Encoding`, `Trailer`, `TE`, `Host`,
 `Connection`, `Keep-Alive`, `Upgrade`, `Max-Forwards`), authentication (`Authorization`,
 `Proxy-Authorization`, `WWW-Authenticate`, `Proxy-Authenticate`, `Cookie`, `Set-Cookie`),
-request modifiers and response controls (`Expect`, `Range`, `Cache-Control`) and content
-format (`Content-Type`, `Content-Encoding`, `Content-Range`), compared without case.
+request modifiers and response controls (`Expect`, `Range`, `Cache-Control`, and the
+conditionals `If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since` and
+`If-Range`) and content format (`Content-Type`, `Content-Encoding`, `Content-Range`),
+compared without case. The list is fixed; any other field a recipient needs before the
+content is for the caller to keep out.
 
 ```python
 from chunkedte import ChunkedError, Encoder, encode
@@ -168,7 +174,7 @@ print(encoder.write(b"still open") + encoder.finish())
 # b'6\r\nhello \r\n5\r\nworld\r\n0\r\nDigest: sha-256=:x:\r\n\r\n'
 # Content-Length cannot be sent as a trailer field
 # trailer name is not a token: 'Bad Name'
-# invalid trailer value for X: 'a\r\nInjected: 1'
+# invalid byte 0x0d at offset 1 in the value of trailer field X
 # b'a\r\nstill open\r\n0\r\n\r\n'
 ```
 
@@ -183,8 +189,11 @@ applies RFC 9112 sections 6.1 and 6.3:
 - chunked twice, chunked with parameters, or a value that is not a list of transfer
   codings: `ChunkedError`;
 - chunked last: `True`;
-- chunked missing or not last: `ChunkedError` for a request, `False` for a response,
-  whose body then runs until the connection closes.
+- chunked missing or not last, or no coding listed at all (an empty value or only
+  commas, which the list grammar allows): `ChunkedError` for a request, `False` for a
+  response, whose body then runs until the connection closes.
+
+`request` must be a `bool`; anything else raises `TypeError`.
 
 Coding names are compared without case. The rest of section 6.3 stays with the caller:
 responses to HEAD, 1xx, 204, 304 and 2xx to CONNECT have no body, and an HTTP/1.0 message
@@ -194,12 +203,14 @@ with Transfer-Encoding has faulty framing.
 from chunkedte import ChunkedError, is_chunked
 
 print(is_chunked("gzip, CHUNKED"), is_chunked(None, "10"), is_chunked("gzip", request=False))
+print(is_chunked("", request=False), is_chunked(" , ", request=False))
 for value in ("chunked, gzip", "chunked;q=1", "gzip,, chunked x", ""):
     try:
         is_chunked(value)
     except ChunkedError as error:
         print(error)
 # True False False
+# False False
 # chunked is not the final transfer coding of a request
 # the chunked coding does not take parameters
 # malformed Transfer-Encoding: 'gzip,, chunked x'
@@ -211,20 +222,29 @@ for value in ("chunked, gzip", "chunked;q=1", "gzip,, chunked x", ""):
 - `ChunkedError` is a `ValueError`; `LimitError` is a `ChunkedError`. A server can answer
   400 for the first and 413 or 431 for the second.
 - Messages quote at most 64 characters of the offending input, followed by `...` when
-  cut.
+  cut. They never quote a trailer value or a whole trailer line, which can hold
+  credentials: they name the field (cut to 64 characters), the first bad byte in hex and
+  its offset, for example `invalid byte 0x00 at offset 7 in the value of trailer field
+  Authorization`.
 - Arguments of the wrong type raise `TypeError`: data that is not `bytes`, `bytearray` or
   `memoryview`, a `limits` that is not a `Limits`, a field value that is neither `str`
-  nor `None`, trailers that are not a mapping or pairs.
+  nor `None`, a `request` that is not a `bool`, trailers that are not a mapping or pairs.
+- A `memoryview` is read as its bytes whatever its format or strides; a released one
+  raises `ValueError` (not a `ChunkedError`).
 - The package ships `py.typed` and passes `mypy --strict`.
 
 ## Command line
 
-`chunkedte decode [FILE]` writes the body to stdout and the trailer fields to stderr, one
-`name: value` line each with bytes outside printable ASCII escaped. `chunkedte encode
-[FILE] [--chunk-size N] [--trailer NAME:VALUE ...]` frames the input as a chunked body.
-Both read stdin without a file, exit 0 on success and 1 with a `chunkedte: ...` message on
-bad input; body bytes decoded before an error may already be on stdout.
-`python -m chunkedte` is the same tool.
+`chunkedte decode [FILE]` writes the body to stdout as decoded, with no newline added,
+and the trailer fields to stderr, one `name: value` line each; bytes 0x80 to 0xFF are
+written as `\xNN` escapes and a tab stays a tab. It stops reading once the message ends
+and then checks for one more byte. `chunkedte encode [FILE] [--chunk-size N] [--trailer
+NAME:VALUE ...]` frames the input as chunks of `N` bytes (the last may be shorter),
+reading at most 64 KiB at a time; a `--trailer` is split at its first colon. Both read
+stdin without a file. Exit status: 0 on success; 1 with a `chunkedte: ...` message on bad
+input, a refused trailer or an unreadable file; 2 with a usage message on a bad command
+line, including a `--chunk-size` that is not an integer of at least 1. Body bytes decoded
+before an error may already be on stdout. `python -m chunkedte` is the same tool.
 
 ## How other parsers differ
 
