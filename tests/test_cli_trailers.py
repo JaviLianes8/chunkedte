@@ -103,6 +103,8 @@ def test_a_form_feed_at_the_end_of_a_trailer_argument_value_is_refused() -> None
     [
         ("X" * 64 + " tail", "invalid byte 0x20 at offset 64"),
         ("X" * 70 + "\u00e9", "non-ASCII character U+00E9 at offset 70"),
+        ("X_Y Z", "invalid byte 0x20 at offset 3"),
+        ("X\x7f", "invalid byte 0x7f at offset 1"),
         (" ", "invalid byte 0x20 at offset 0"),
         ("\t", "invalid byte 0x09 at offset 0"),
         ("\U0001f600", "non-ASCII character U+1F600 at offset 0"),
@@ -116,4 +118,17 @@ def test_a_form_feed_at_the_end_of_a_trailer_argument_value_is_refused() -> None
 def test_the_whole_trailer_name_is_checked_before_anything_else(name: str, message: str) -> None:
     with pytest.raises(ChunkedError) as caught:
         encode(b"", trailers=[(name, "v")])
+    assert str(caught.value) == f"{message} in a trailer field name"
+
+
+@pytest.mark.parametrize(
+    ("tail", "message"),
+    [
+        (" tail", "invalid byte 0x20 at offset 100000"),
+        ("\u00e9", "non-ASCII character U+00E9 at offset 100000"),
+    ],
+)
+def test_a_very_long_trailer_name_is_checked_to_its_end(tail: str, message: str) -> None:
+    with pytest.raises(ChunkedError) as caught:
+        encode(b"", trailers=[("X" * 100_000 + tail, "v")])
     assert str(caught.value) == f"{message} in a trailer field name"
