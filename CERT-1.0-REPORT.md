@@ -26,7 +26,7 @@ Progress:
 | 2 | `__all__` exact, no private imports in docs | PASS: the package top holds exactly `__all__` (checked from the installed wheel too) |
 | 3 | Docstrings with runnable examples, doctests | PASS: 14 doctests; README (5 blocks) and GUIDE (6 blocks) run as tests |
 | 4 | Typed end to end | PASS: `mypy --strict src tests`, `py.typed`, typing checked from a consumer of the installed wheel |
-| 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters |
+| 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters and never a trailer value or line (QA round 1) |
 | 6 | Contract tests of every public name | PASS |
 | 7 | Real ground truth | PASS: RFC 9112 and RFC 9110 fetched, llhttp test corpus fetched, llhttp (Node.js), h11 and http.client run live, PyPI 0.2.0 as an oracle |
 | 8 | Real e2e from the wheel | PASS: installed wheel and CLI driven from an empty folder, consumer type-checked, upgrade in place from PyPI 0.2.0 |
@@ -39,8 +39,8 @@ Progress:
 | 15 | Gates each exit 0 | PASS: see Gates |
 | 16 | Independent reviewer | pending |
 | 17 | PR and trace guard | PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
-| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed |
-| 19 | Five independent QA lenses | pending |
+| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the 7 survivors of lens e's round 1 now killed |
+| 19 | Five independent QA lenses | round 1 findings fixed (see QA lenses); re-verification by each lens pending |
 
 ## Baseline on 0.2.0 (before any change)
 
@@ -126,48 +126,7 @@ limit. All 40 killed. M18 and M22 were first killed only by the 0.2.0 oracle; di
 contracts were added for them (obs-fold starting with a tab, quoted pairs of obs-text,
 tab and space) and kill both on their own.
 
-| Id | Module | Mutation | Caught by |
-| --- | --- | --- | --- |
-| M1 | `_lines.py` | bare LF at the start of the buffer not checked | `test_strict::test_a_bare_lf_as_the_first_byte_of_a_line_is_rejected` |
-| M2 | `_lines.py` | unfinished line allowed one byte more | `test_docs::test_each_guide_example_prints_what_its_comments_show[3]` |
-| M3 | `_lines.py` | a line exactly at the limit refused | `test_limits::test_a_size_line_at_the_limit_passes_and_one_byte_more_fails` |
-| M4 | `_lines.py` | bare CR inside a line accepted | `test_strict::test_a_bare_cr_in_a_size_line_is_rejected` |
-| M5 | `_decode.py` | bytes after chunk data checked only once two arrived | `test_strict::test_a_wrong_byte_after_chunk_data_fails_without_waiting_for_more` |
-| M6 | `_decode.py` | leading zeros counted toward the 16 digit cap | `test_limits::test_leading_zeros_do_not_count_towards_the_size_cap` |
-| M7 | `_decode.py` | `max_chunk_size` itself refused | `test_limits::test_chunk_size_is_capped` |
-| M8 | `_decode.py` | body cap checked per chunk, not in total | `test_limits::test_body_size_is_capped_when_the_size_line_arrives` |
-| M9 | `_decode.py` | extension bytes counted per line, not per message | `test_limits::test_extension_bytes_are_bounded_across_the_whole_message` |
-| M10 | `_decode.py` | trailer budget without the line's CRLF | `test_limits::test_trailer_section_is_capped_including_crlfs` |
-| M11 | `_decode.py` | `unused_data` returned before completion | `test_decode::test_unused_data_is_empty_before_completion` |
-| M12 | `_decode.py` | a failed decoder not poisoned | `test_decode::test_a_failed_decoder_keeps_failing` |
-| M13 | `_decode.py` | one byte too many taken from chunk data | the 300 s per-test timeout (the decoder loops forever) |
-| M14 | `_decode.py` | a size of 1 read as the last chunk | doctest `Decoder.unused_data` |
-| M15 | `_grammar.py` | `~` dropped from `tchar` | `test_oracle_llhttp::test_valid_messages_without_bws_decode_identically` |
-| M16 | `_grammar.py` | `"` allowed as `qdtext` | `test_fuzz::test_mutated_messages_get_the_same_verdict[0]` |
-| M17 | `_grammar.py` | tab dropped from BWS | `test_fuzz::test_mutated_messages_get_the_same_verdict[1]` |
-| M18 | `_grammar.py` | obs-fold detected for a space only, not a tab | `test_upgrade` first; now `test_strict::test_obs_fold_in_trailers_is_rejected_with_a_clear_message[\tb]` |
-| M19 | `_grammar.py` | `Host` allowed as a trailer | `test_encode::test_framing_and_routing_fields_are_refused_as_trailers[Host]` |
-| M20 | `_grammar.py` | edge whitespace in a trailer value allowed | `test_encode::test_trailer_values_must_be_clean_field_values[ lead]` |
-| M21 | `_grammar.py` | trailer values trimmed of spaces but not tabs | `test_decode::test_trailers_are_kept_in_order_with_trimmed_values` |
-| M22 | `_grammar.py` | obs-text not allowed after a backslash | `test_upgrade` first; now `test_strict::test_quoted_pairs_escape_obs_text_and_whitespace` |
-| M23 | `_encode.py` | chunk size written in decimal | doctest `Encoder.write` |
-| M24 | `_encode.py` | empty piece written as a zero-size chunk | doctest `Encoder` |
-| M25 | `_encode.py` | pieces of `chunk_size + 1` bytes | doctest `encode` |
-| M26 | `_encode.py` | `finish` does not close the encoder | `test_contract_api::test_a_refused_trailer_leaves_the_encoder_open` |
-| M27 | `_framing.py` | chunked applied twice allowed | `test_docs::test_each_example_prints_what_its_comments_show[4]` |
-| M28 | `_framing.py` | request and response rules swapped | doctest `is_chunked` |
-| M29 | `_framing.py` | Transfer-Encoding with Content-Length allowed | doctest `is_chunked` |
-| M30 | `_framing.py` | coding names compared with case | `test_docs::test_each_guide_example_prints_what_its_comments_show[5]` |
-| M31 | `_framing.py` | parameters on chunked allowed | `test_docs::test_each_guide_example_prints_what_its_comments_show[5]` |
-| M32 | `_limits.py` | `-1` accepted as a bound | `test_limits::test_negative_limits_are_refused[max_line_size]` |
-| M33 | `_errors.py` | a 64 character quote marked as cut | `test_messages::test_a_cut_quote_is_marked_and_a_short_one_is_not` |
-| M34 | `_oneshot.py` | `decode` ignores bytes after the message | doctest `decode` |
-| M35 | `_cli.py` | `decode` ignores bytes in a later block | `test_cli::test_decode_notices_bytes_after_the_end_in_a_later_block` |
-| M36 | `_cli.py` | `--chunk-size 0` accepted | `test_cli::test_encode_reports_bad_options_before_any_output` |
-| M37 | `_encode.py` | a two-character string taken as a pair | `test_contract_api::test_trailers_must_be_a_mapping_or_pairs` |
-| M38 | `_errors.py` | only `str` refused as data | `test_contract_api::test_only_bytes_like_data_is_accepted[5]` |
-| M39 | `_decode.py` | `limits` type not checked | `test_contract_api::test_decoder_refuses_anything_but_limits[5]` |
-| M40 | `_cli.py` | trailer bytes printed without escaping | `test_cli::test_decode_escapes_trailer_bytes_for_an_ascii_terminal` |
+The table (mutation, module, the test that killed it) is in `CERT-1.0-MUTATIONS.md`.
 
 ## Packaging, e2e and Pythons (items 8, 10, 13, 14)
 
@@ -193,7 +152,46 @@ tab and space) and kill both on their own.
 
 ## Gates (item 15)
 
-At c074fc3 on Elena's PC from a fresh clone (CPython 3.14), each command on its own, with
-the fetched sources, Node.js llhttp, h11, the 0.2.0 oracle, `CHUNKEDTE_E2E=1` and
-`CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`, `mypy --strict src`,
-`mypy --strict src tests` and `pytest` (416 passed, no skips) all exit 0.
+At 099ef17 (the QA round 1 fixes) on Elena's PC from a fresh clone (CPython 3.14), each
+command on its own, with the fetched sources, Node.js llhttp, h11, the 0.2.0 oracle,
+`CHUNKEDTE_E2E=1` and `CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`,
+`mypy --strict src`, `mypy --strict src tests` and `pytest` (477 passed, no skips) all
+exit 0. Before the fixes, at c074fc3, the same run gave 416 passed. The interpreter matrix
+(item 10) was last run at d12c212 and is not repeated here.
+
+## QA lenses (item 19)
+
+Round 1 ran against 5a8e4e2. Lenses a (API and docs), b (ground truth), c (adversarial)
+and e (contract strength) reported the findings below; all are fixed in 099ef17, each
+behaviour fix with a contract test that failed on 5a8e4e2 first. Every behaviour change is
+in the CHANGELOG. Re-verification by each lens is pending.
+
+| Finding | Fix | Pinned by |
+| --- | --- | --- |
+| a-F1, c-F3 `feed` "first byte" wording; error class depends on the split | `take_line` checks the length before a bare LF; `feed` docstring and GUIDE say a grammar error comes when the line is complete | `test_contract_edges::test_the_error_class_does_not_depend_on_how_the_input_is_split` (20,000 seeded inputs, 3 splits) |
+| a-F2 `__module__` rewrite broke `inspect.getsource` | classes keep their module; `Limits` and the errors pickle through `chunkedte._restore`; doctest reaches the classes through `__test__` | `test_the_source_of_every_public_name_can_be_shown`, `test_pickles_of_limits_and_errors_name_only_the_package` |
+| a-F3 tab not escaped in CLI trailers | docs: bytes 0x80 to 0xFF are escaped, a tab stays a tab | `test_cli::test_decode_writes_a_tab_in_a_trailer_raw_and_escapes_bytes_above_0x7f` |
+| a-F4 README CLI transcript | real output: stdout, stderr and `od -c` of `encode` | `test_docs::test_the_command_line_example_prints_what_the_readme_shows` (parses the transcript) |
+| a-F5 exit codes | `--chunk-size` below 1 is a usage error (2); README and GUIDE list 0, 1 and 2 | `test_cli::test_a_chunk_size_that_is_not_a_positive_int_is_a_usage_error` |
+| a-F6 non-ASCII name called "not latin-1" | reported as not a token | `test_a_non_ascii_trailer_name_is_not_a_token` |
+| a-F7 `request` read by truth | `TypeError` for a non-`bool` | `test_is_chunked_takes_only_a_bool_request`, `test_upgrade` |
+| a-F8 undated CHANGELOG sections | 0.2.0 dated 2026-10-19 (PyPI upload); 0.1.0 dated 2026-10-11 (merge) and marked as never on PyPI | docs |
+| b-F1 empty Transfer-Encoding list | `False` for a response, `ChunkedError` still for a request | `test_framing::test_a_response_field_without_codings_is_read_to_close`, `test_upgrade` |
+| b-F2 conditionals accepted as trailers | `If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since`, `If-Range` refused; docs say the list is fixed | `test_conditional_request_fields_are_refused_as_trailers` |
+| c-F1 messages echoed trailer values | messages name the field, the bad byte in hex and its offset, never the value or line | `test_error_messages_never_echo_a_trailer_value`, `test_a_bad_trailer_value_names_the_field_byte_and_offset` |
+| c-F2 strided or released `memoryview` | strided views copied to bytes; released ones raise `ValueError` like `encode` | `test_wide_and_strided_memoryviews_are_read_as_their_bytes`, `test_a_released_memoryview_raises_value_error_everywhere` |
+| c-F4 huge `--chunk-size` crashed | `encode` reads at most 64 KiB at a time and fills each chunk; `MemoryError` becomes a `chunkedte:` message | `test_cli::test_a_huge_chunk_size_reads_in_bounded_blocks`, `test_encode_fills_each_chunk_from_short_reads` |
+| e-F1, e-F2 wide-item `memoryview` | contracts added | X8 and X27 killed by the `memoryview` test above |
+| e-F3 empty `str`/`bytes` trailers | contract added | E9 killed by `test_contract_api::test_trailers_must_be_a_mapping_or_pairs` |
+| e-F4 `--trailer` split | contract added | X7 killed by `test_cli::test_encode_splits_a_trailer_argument_on_the_first_colon` |
+| e-F5 huge name in a value error | contract added (encoder and decoder) | X17 killed by `test_messages` (`value, huge name` cases) |
+| e-F6 CLI reads past the end | contract added | X22 killed by `test_cli::test_decode_stops_reading_once_the_message_is_complete` |
+| e-F7 method `__module__` unpinned | contract added | X21 killed by `test_the_package_doctests_include_the_methods` (14 found on `chunkedte`) |
+
+The seven mutants were re-applied one at a time to a copy of 099ef17 and each was killed by
+the test named. Tests named without a file are in `tests/test_contract_edges.py`.
+
+### Disputed findings
+
+None.
+
