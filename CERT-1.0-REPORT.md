@@ -12,7 +12,7 @@ Progress:
 - [x] Ground truth: specifications fetched live, reference parsers run (item 7)
 - [x] Contract, fuzz and author mutation round (items 6, 9, 18)
 - [x] Docs: README, GUIDE, CHANGELOG (items 11, 12)
-- [ ] Packaging, e2e and upgrade from PyPI 0.2.0, every Python (items 8, 10, 13, 14)
+- [x] Packaging, e2e and upgrade from PyPI 0.2.0, every Python (items 8, 10, 13, 14)
 - [ ] Gates (item 15)
 - [ ] Five QA lenses report PASS (item 19)
 - [ ] Independent reviewer reports PASS (item 16)
@@ -29,9 +29,9 @@ Progress:
 | 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters |
 | 6 | Contract tests of every public name | PASS |
 | 7 | Real ground truth | PASS: RFC 9112 and RFC 9110 fetched, llhttp test corpus fetched, llhttp (Node.js), h11 and http.client run live, PyPI 0.2.0 as an oracle |
-| 8 | Real e2e from the wheel | see Packaging |
+| 8 | Real e2e from the wheel | PASS: installed wheel and CLI driven from an empty folder, consumer type-checked, upgrade in place from PyPI 0.2.0 |
 | 9 | Seeded fuzz, no crash, hang or blowup | PASS |
-| 10 | Supported Pythons | see Packaging |
+| 10 | Supported Pythons | PASS: CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8, 3.14.8t; 3.8 and 3.9 below `requires-python` |
 | 11 | README and `twine check` | PASS: `twine check --strict` in the e2e test, absolute links pinned by a test |
 | 12 | Dated CHANGELOG section | PASS: 1.0.0, 2026-10-20 |
 | 13 | pyproject 1.0.0, Production/Stable | PASS |
@@ -185,7 +185,17 @@ tab and space) and kill both on their own.
   `python -m chunkedte` by subprocess (good input, bad input, exit codes), type-check a
   consumer with `mypy --strict` against the installed wheel, and install 0.2.0 from PyPI,
   then upgrade it in place to the built wheel and run the same program again.
-- Interpreter matrix: pending.
+- Every CPython from `requires-python` up, at d12c212 on Elena's PC (the same minor
+  versions this PC has, installed there by `uv` in a private folder): the wheel installed
+  in a fresh venv and the sdist's own suite run with `src` removed (fetched sources,
+  Node.js llhttp, h11 and the 0.2.0 oracle present), plus the 14 doctests from the
+  installed package: CPython 3.10.22, 3.11.17, 3.12.15, 3.13.16, 3.14.8 and 3.14.8
+  free-threaded all exit 0 (the three e2e tests need the source tree and run separately,
+  above). 3.8 and 3.9 are below `requires-python`. This run found that
+  `test_python_dash_m_runs_the_tool` assumed the source tree; it now runs from the folder
+  holding the installed package.
+- `scripts/release.ps1` refused any upload once the name existed on PyPI, so it could
+  never have published 1.0.0; it now refuses a version already there and a dirty tree.
 
 ## Gates (item 15)
 
