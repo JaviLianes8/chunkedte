@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from ._errors import QUOTE_LIMIT, ChunkedError, quote
+from ._errors import QUOTE_LIMIT, ChunkedError
 
 # RFC 9110 section 5.6.2: tchar is any VCHAR except the delimiters.
 TCHAR = rb"!#$%&'*+\-.^_`|~0-9A-Za-z"
@@ -86,8 +86,7 @@ def format_field_line(name: str, value: str) -> bytes:
     """Validate one trailer field for sending and return ``name: value`` as bytes."""
     if not isinstance(name, str) or not isinstance(value, str):
         raise TypeError("trailer names and values must be str")
-    if not name.isascii() or not TOKEN_RE.fullmatch(name.encode("ascii")):
-        raise ChunkedError(f"trailer name is not a token: {quote(name)}")
+    _check_name(name)
     if name.lower() in FORBIDDEN_TRAILERS:
         raise ChunkedError(f"{name} cannot be sent as a trailer field")
     try:
@@ -101,6 +100,23 @@ def format_field_line(name: str, value: str) -> bytes:
             f"whitespace at the start or end of the value of trailer field {_shown(name)}"
         )
     return name.encode("ascii") + b": " + raw_value
+
+
+def _check_name(name: str) -> None:
+    # A refused name can be a credential typed with a space or "=" before its first colon,
+    # so the message gives the first bad character and its offset, never the name.
+    if name.isascii() and TOKEN_RE.fullmatch(name.encode("ascii")):
+        return
+    if not name:
+        raise ChunkedError("empty trailer field name")
+    for at, char in enumerate(name):
+        if not char.isascii():
+            where = f"at offset {at} in a trailer field name"
+            raise ChunkedError(f"non-ASCII character U+{ord(char):04X} {where}")
+        if not TOKEN_RE.fullmatch(char.encode("ascii")):
+            raise ChunkedError(
+                f"invalid byte 0x{ord(char):02x} at offset {at} in a trailer field name"
+            )
 
 
 def _check_value(name: str, value: bytes) -> None:

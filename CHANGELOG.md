@@ -35,8 +35,12 @@ change below is listed with what 0.2.0 did.
   credentials: they name the field, the first bad byte in hex and its offset (`invalid
   byte 0x00 at offset 7 in the value of trailer field Authorization`). 0.2.0 quoted the
   value or the line.
-- A non-ASCII trailer name is reported as `trailer name is not a token` (0.2.0 said it
-  was not latin-1 text, which was wrong for names such as `ñ`).
+- A refused trailer name is never quoted, since a credential typed with a space or `=`
+  before a colon inside it (`--trailer "Authorization Bearer v1:abc"`) lands in the name:
+  the message gives the first bad character and its offset (`invalid byte 0x20 at offset
+  13 in a trailer field name`, `non-ASCII character U+00F1 at offset 0 in a trailer field
+  name`), or says `empty trailer field name`, as the decoder does. 0.2.0 quoted the whole
+  name, and called a non-ASCII name such as `ñ` not latin-1 text.
 - Pickles of `Limits`, `ChunkedError` and `LimitError` name only `chunkedte`, never the
   private module that defines the class. The classes still report that module, so
   `inspect.getsource`, IDEs and documentation tools find their source; the functions and

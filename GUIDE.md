@@ -173,7 +173,7 @@ for trailers in ({"Content-Length": "5"}, {"Bad Name": "1"}, {"X": "a\r\nInjecte
 print(encoder.write(b"still open") + encoder.finish())
 # b'6\r\nhello \r\n5\r\nworld\r\n0\r\nDigest: sha-256=:x:\r\n\r\n'
 # Content-Length cannot be sent as a trailer field
-# trailer name is not a token: 'Bad Name'
+# invalid byte 0x20 at offset 3 in a trailer field name
 # invalid byte 0x0d at offset 1 in the value of trailer field X
 # b'a\r\nstill open\r\n0\r\n\r\n'
 ```

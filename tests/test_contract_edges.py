@@ -70,7 +70,7 @@ def test_the_package_doctests_include_the_methods() -> None:
 
 @pytest.mark.parametrize("name", ["ñ", "X-€", "é"])
 def test_a_non_ascii_trailer_name_is_not_a_token(name: str) -> None:
-    with pytest.raises(ChunkedError, match="trailer name is not a token"):
+    with pytest.raises(ChunkedError, match=r"non-ASCII character U\+.... at offset"):
         encode(b"x", trailers={name: "b"})
 
 
