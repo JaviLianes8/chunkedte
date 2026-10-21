@@ -118,3 +118,27 @@ def test_a_non_latin_1_trailer_value_names_the_character_offset() -> None:
         encode(b"", trailers={"X-Key": "ab\u20accd"})
     expected = "character at offset 2 in the value of trailer field X-Key is not latin-1"
     assert str(caught.value) == expected
+
+
+def _raised(action: Callable[[], object]) -> str:
+    with pytest.raises(ChunkedError) as caught:
+        action()
+    return str(caught.value)
+
+
+@pytest.mark.parametrize(("size", "shown"), [(64, "X" * 64), (65, "X" * 64 + "...")])
+def test_a_trailer_name_is_quoted_whole_up_to_64_characters(size: int, shown: str) -> None:
+    name = "X" * size
+    value_error = f"invalid byte 0x00 at offset 1 in the value of trailer field {shown}"
+    assert _raised(lambda: encode(b"", trailers=[(name, "a\x00")])) == value_error
+    wire = b"0\r\n" + name.encode("ascii") + b": a\x00\r\n\r\n"
+    assert _raised(lambda: decode(wire)) == value_error
+    edge = f"whitespace at the start or end of the value of trailer field {shown}"
+    assert _raised(lambda: encode(b"", trailers=[(name, " a")])) == edge
+    latin = f"character at offset 0 in the value of trailer field {shown} is not latin-1"
+    assert _raised(lambda: encode(b"", trailers=[(name, "\u20ac")])) == latin
+
+
+def test_a_run_of_non_latin_1_characters_names_the_first_offset() -> None:
+    expected = "character at offset 2 in the value of trailer field X-Key is not latin-1"
+    assert _raised(lambda: encode(b"", trailers={"X-Key": "ab\u20ac\u20ac\u20accd"})) == expected
