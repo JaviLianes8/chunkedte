@@ -13,7 +13,7 @@ Progress:
 - [x] Contract, fuzz and author mutation round (items 6, 9, 18)
 - [x] Docs: README, GUIDE, CHANGELOG (items 11, 12)
 - [x] Packaging, e2e and upgrade from PyPI 0.2.0, every Python (items 8, 10, 13, 14)
-- [ ] Gates (item 15)
+- [x] Gates (item 15)
 - [ ] Five QA lenses report PASS (item 19)
 - [ ] Independent reviewer reports PASS (item 16)
 - [ ] PR and trace guard CLEAN (item 17); merge and publish left to the maintainer
@@ -36,9 +36,9 @@ Progress:
 | 12 | Dated CHANGELOG section | PASS: 1.0.0, 2026-10-20 |
 | 13 | pyproject 1.0.0, Production/Stable | PASS |
 | 14 | sdist and wheel contents | PASS: pinned by `tests/test_e2e_wheel.py` |
-| 15 | Gates each exit 0 | see Gates |
+| 15 | Gates each exit 0 | PASS: see Gates |
 | 16 | Independent reviewer | pending |
-| 17 | PR and trace guard | pending |
+| 17 | PR and trace guard | PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
 | 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed |
 | 19 | Five independent QA lenses | pending |
 
@@ -199,4 +199,7 @@ tab and space) and kill both on their own.
 
 ## Gates (item 15)
 
-Pending the final run.
+At c074fc3 on Elena's PC from a fresh clone (CPython 3.14), each command on its own, with
+the fetched sources, Node.js llhttp, h11, the 0.2.0 oracle, `CHUNKEDTE_E2E=1` and
+`CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`, `mypy --strict src`,
+`mypy --strict src tests` and `pytest` (416 passed, no skips) all exit 0.
