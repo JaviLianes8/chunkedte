@@ -26,7 +26,7 @@ Progress:
 | 2 | `__all__` exact, no private imports in docs | PASS: the package top holds exactly `__all__` (checked from the installed wheel too) |
 | 3 | Docstrings with runnable examples, doctests | PASS: 14 doctests; README (5 blocks) and GUIDE (6 blocks) run as tests |
 | 4 | Typed end to end | PASS: `mypy --strict src tests`, `py.typed`, typing checked from a consumer of the installed wheel |
-| 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters and never a trailer value or line (QA round 1) |
+| 5 | Typed, documented, bounded errors | PASS: `ChunkedError` (a `ValueError`), `LimitError`, `TypeError` for wrong types; messages quote at most 64 characters and never a trailer value or line (QA round 1) nor a `--trailer` argument without a colon (QA round 2) |
 | 6 | Contract tests of every public name | PASS |
 | 7 | Real ground truth | PASS: RFC 9112 and RFC 9110 fetched, llhttp test corpus fetched, llhttp (Node.js), h11 and http.client run live, PyPI 0.2.0 as an oracle |
 | 8 | Real e2e from the wheel | PASS: installed wheel and CLI driven from an empty folder, consumer type-checked, upgrade in place from PyPI 0.2.0 |
@@ -39,8 +39,8 @@ Progress:
 | 15 | Gates each exit 0 | PASS: see Gates |
 | 16 | Independent reviewer | pending |
 | 17 | PR and trace guard | PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
-| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the 7 survivors of lens e's round 1 now killed |
-| 19 | Five independent QA lenses | round 1 findings fixed (see QA lenses); re-verification by each lens pending |
+| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the 7 survivors of lens e's round 1 and the 11 of its round 2 now killed |
+| 19 | Five independent QA lenses | round 1 and round 2 findings fixed (see QA lenses); re-verification of round 2 by lenses c and e pending |
 
 ## Baseline on 0.2.0 (before any change)
 
@@ -152,44 +152,40 @@ The table (mutation, module, the test that killed it) is in `CERT-1.0-MUTATIONS.
 
 ## Gates (item 15)
 
-At 099ef17 (the QA round 1 fixes) on Elena's PC from a fresh clone (CPython 3.14), each
+At e644142 (the QA round 2 fixes) on the laptop from a fresh clone (CPython 3.14), each
 command on its own, with the fetched sources, Node.js llhttp, h11, the 0.2.0 oracle,
 `CHUNKEDTE_E2E=1` and `CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`,
-`mypy --strict src`, `mypy --strict src tests` and `pytest` (477 passed, no skips) all
-exit 0. Before the fixes, at c074fc3, the same run gave 416 passed. The interpreter matrix
+`mypy --strict src`, `mypy --strict src tests` and `pytest` (490 passed, no skips) all
+exit 0. The same run gave 416 passed at c074fc3 and 477 at 099ef17 (QA round 1 fixes). The interpreter matrix
 (item 10) was last run at d12c212 and is not repeated here.
 
 ## QA lenses (item 19)
 
-Round 1 ran against 5a8e4e2. Lenses a (API and docs), b (ground truth), c (adversarial)
-and e (contract strength) reported the findings below; all are fixed in 099ef17, each
-behaviour fix with a contract test that failed on 5a8e4e2 first. Every behaviour change is
-in the CHANGELOG. Re-verification by each lens is pending.
+Round 1 ran against 5a8e4e2: lenses a, b, c and e reported 21 findings, all fixed in
+099ef17, each behaviour fix with a contract test that failed on 5a8e4e2 first. The table
+(finding, fix, test) is in `CERT-1.0-QA.md`.
 
-| Finding | Fix | Pinned by |
+Round 2 ran against 276f0e7. Lens c confirmed F1 to F4 fixed and reported N1; lens e
+confirmed its 7 round 1 mutants killed, ran 40 new mutants (N01 to N40) on the changed
+code and reported the 11 survivors as G1 to G7. All are fixed in e644142. N1 and G1 are
+behaviour bugs: their tests failed on 276f0e7 first, and both changes are in the
+CHANGELOG. G2 to G7 were missing contracts: the tests pass on 276f0e7 and kill the named
+mutants. Each named mutant was re-applied alone to the tree at e644142 and was killed by
+the test named.
+
+| Finding | Fix | Pinned by (mutants killed) |
 | --- | --- | --- |
-| a-F1, c-F3 `feed` "first byte" wording; error class depends on the split | `take_line` checks the length before a bare LF; `feed` docstring and GUIDE say a grammar error comes when the line is complete | `test_contract_edges::test_the_error_class_does_not_depend_on_how_the_input_is_split` (20,000 seeded inputs, 3 splits) |
-| a-F2 `__module__` rewrite broke `inspect.getsource` | classes keep their module; `Limits` and the errors pickle through `chunkedte._restore`; doctest reaches the classes through `__test__` | `test_the_source_of_every_public_name_can_be_shown`, `test_pickles_of_limits_and_errors_name_only_the_package` |
-| a-F3 tab not escaped in CLI trailers | docs: bytes 0x80 to 0xFF are escaped, a tab stays a tab | `test_cli::test_decode_writes_a_tab_in_a_trailer_raw_and_escapes_bytes_above_0x7f` |
-| a-F4 README CLI transcript | real output: stdout, stderr and `od -c` of `encode` | `test_docs::test_the_command_line_example_prints_what_the_readme_shows` (parses the transcript) |
-| a-F5 exit codes | `--chunk-size` below 1 is a usage error (2); README and GUIDE list 0, 1 and 2 | `test_cli::test_a_chunk_size_that_is_not_a_positive_int_is_a_usage_error` |
-| a-F6 non-ASCII name called "not latin-1" | reported as not a token | `test_a_non_ascii_trailer_name_is_not_a_token` |
-| a-F7 `request` read by truth | `TypeError` for a non-`bool` | `test_is_chunked_takes_only_a_bool_request`, `test_upgrade` |
-| a-F8 undated CHANGELOG sections | 0.2.0 dated 2026-10-19 (PyPI upload); 0.1.0 dated 2026-10-11 (merge) and marked as never on PyPI | docs |
-| b-F1 empty Transfer-Encoding list | `False` for a response, `ChunkedError` still for a request | `test_framing::test_a_response_field_without_codings_is_read_to_close`, `test_upgrade` |
-| b-F2 conditionals accepted as trailers | `If-Match`, `If-None-Match`, `If-Modified-Since`, `If-Unmodified-Since`, `If-Range` refused; docs say the list is fixed | `test_conditional_request_fields_are_refused_as_trailers` |
-| c-F1 messages echoed trailer values | messages name the field, the bad byte in hex and its offset, never the value or line | `test_error_messages_never_echo_a_trailer_value`, `test_a_bad_trailer_value_names_the_field_byte_and_offset` |
-| c-F2 strided or released `memoryview` | strided views copied to bytes; released ones raise `ValueError` like `encode` | `test_wide_and_strided_memoryviews_are_read_as_their_bytes`, `test_a_released_memoryview_raises_value_error_everywhere` |
-| c-F4 huge `--chunk-size` crashed | `encode` reads at most 64 KiB at a time and fills each chunk; `MemoryError` becomes a `chunkedte:` message | `test_cli::test_a_huge_chunk_size_reads_in_bounded_blocks`, `test_encode_fills_each_chunk_from_short_reads` |
-| e-F1, e-F2 wide-item `memoryview` | contracts added | X8 and X27 killed by the `memoryview` test above |
-| e-F3 empty `str`/`bytes` trailers | contract added | E9 killed by `test_contract_api::test_trailers_must_be_a_mapping_or_pairs` |
-| e-F4 `--trailer` split | contract added | X7 killed by `test_cli::test_encode_splits_a_trailer_argument_on_the_first_colon` |
-| e-F5 huge name in a value error | contract added (encoder and decoder) | X17 killed by `test_messages` (`value, huge name` cases) |
-| e-F6 CLI reads past the end | contract added | X22 killed by `test_cli::test_decode_stops_reading_once_the_message_is_complete` |
-| e-F7 method `__module__` unpinned | contract added | X21 killed by `test_the_package_doctests_include_the_methods` (14 found on `chunkedte`) |
+| c-N1 a `--trailer` without a colon (a likely credential typo) was echoed | the message is `--trailer needs NAME:VALUE (no colon found)`, without the argument | `test_messages::test_a_trailer_argument_without_a_colon_is_never_echoed` (3 shapes, fails on 276f0e7) |
+| e-G1 `MemoryError` printed `chunkedte: ` and nothing: an exception is always true, so the name fallback was dead | `str(error) or type(error).__name__` | `test_messages::test_running_out_of_memory_names_the_error_and_exits_1` (encode, decode; fails on 276f0e7; N15, N16) |
+| e-G2 pickles of errors could drop `__notes__` and attributes | contract added | `test_pickles_keep_notes_and_attributes_of_errors` (N06) |
+| e-G3 pickles of a `ChunkedError` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N08) |
+| e-G4 pickles of a `Limits` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N11) |
+| e-G5 huge non-integer `--chunk-size` message | exact quoted message and stderr under 400 characters | `test_messages::test_a_huge_non_integer_chunk_size_is_quoted_briefly` (N13, N14) |
+| e-G6 malformed trailer name messages | exact message per branch (no colon, empty name, bad byte at offset 3 and at 0) | `test_messages::test_a_malformed_trailer_field_line_gets_its_exact_message` (N31, N32, N33) |
+| e-G7 offset of a non-latin-1 trailer value | exact message with offset 2 | `test_messages::test_a_non_latin_1_trailer_value_names_the_character_offset` (N37) |
 
-The seven mutants were re-applied one at a time to a copy of 099ef17 and each was killed by
-the test named. Tests named without a file are in `tests/test_contract_edges.py`.
+Tests named without a file are in `tests/test_contract_edges.py`. Gates at e644142 are
+under Gates (490 passed). Re-verification of round 2 by lenses c and e is pending.
 
 ### Disputed findings
 
