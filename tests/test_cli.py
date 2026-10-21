@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import chunkedte
 from chunkedte import encode
 from chunkedte._cli import main
 
@@ -108,6 +109,7 @@ def test_python_dash_m_runs_the_tool() -> None:
         input=b"2\r\nok\r\n0\r\n\r\n",
         capture_output=True,
         check=False,
-        cwd=Path(__file__).resolve().parents[1] / "src",
+        # The folder holding the package: src in a checkout, site-packages when installed.
+        cwd=Path(chunkedte.__file__).resolve().parents[1],
     )
     assert (result.returncode, result.stdout) == (0, b"ok")
