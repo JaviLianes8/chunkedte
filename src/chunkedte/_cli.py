@@ -60,7 +60,7 @@ def main(
                 return _run(args, handle, out, err)
         return _run(args, source, out, err)
     except (ChunkedError, ValueError, OSError, MemoryError) as error:
-        print(f"chunkedte: {error or type(error).__name__}", file=err)
+        print(f"chunkedte: {str(error) or type(error).__name__}", file=err)
         return 1
 
 
@@ -109,5 +109,6 @@ def _decode(source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
 def _split_trailer(text: str) -> tuple[str, str]:
     name, colon, value = text.partition(":")
     if not colon:
-        raise ValueError(f"--trailer needs NAME:VALUE, got {quote(text)}")
+        # Never quote the argument: a typo for "Authorization: <token>" holds the token.
+        raise ValueError("--trailer needs NAME:VALUE (no colon found)")
     return name, value.strip(" \t")

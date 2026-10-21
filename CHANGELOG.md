@@ -28,6 +28,9 @@ change below is listed with what 0.2.0 did.
   two-character string into a name and a value).
 - Error messages quote at most 64 characters of the input, followed by `...` when cut.
   0.2.0 quoted a refused trailer value or name, and a bad `--trailer` argument, in full.
+- `chunkedte encode` never quotes a `--trailer` argument that has no colon, since it is
+  usually a credential typed with `=` or a space: it says `--trailer needs NAME:VALUE (no
+  colon found)`. 0.2.0 quoted the whole argument.
 - Error messages never quote a trailer value or a whole trailer line, which can hold
   credentials: they name the field, the first bad byte in hex and its offset (`invalid
   byte 0x00 at offset 7 in the value of trailer field Authorization`). 0.2.0 quoted the
@@ -57,6 +60,8 @@ change below is listed with what 0.2.0 did.
   fills every chunk but the last to `--chunk-size` even from short reads (0.2.0 asked for
   `--chunk-size` bytes per read, so a huge value crashed with `OverflowError` or
   `MemoryError`, and a short read gave a short chunk).
+- `chunkedte` reports running out of memory as `chunkedte: MemoryError` with exit status 1
+  (0.2.0 ended with a traceback).
 - `python -m chunkedte` only runs the tool when executed, not when the module is imported.
 - The package top holds only the public names (0.2.0 also exposed a stray `annotations`).
 

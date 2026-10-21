@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import array
+import dataclasses
 import doctest
 import inspect
 import pickle
 import random
+import sys
 from collections.abc import Callable
 
 import pytest
@@ -31,6 +33,32 @@ def test_pickles_of_limits_and_errors_name_only_the_package() -> None:
         restored = pickle.loads(data)
         assert type(restored) is type(value)
         assert repr(restored) == repr(value)
+
+
+class AppError(ChunkedError):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class StrictLimits(Limits):
+    pass
+
+
+def test_pickles_keep_notes_and_attributes_of_errors() -> None:
+    for error in (ChunkedError("bad"), LimitError("body exceeds max_body_size")):
+        if sys.version_info >= (3, 11):
+            error.add_note("while reading request 7")
+        error.request_id = 7  # type: ignore[attr-defined]
+        restored = pickle.loads(pickle.dumps(error))
+        assert vars(restored) == vars(error) and restored.request_id == 7
+        assert getattr(restored, "__notes__", None) == getattr(error, "__notes__", None)
+
+
+def test_pickles_keep_the_type_of_subclasses() -> None:
+    error = pickle.loads(pickle.dumps(AppError("x")))
+    assert (type(error), error.args) == (AppError, ("x",))
+    limits = pickle.loads(pickle.dumps(StrictLimits(max_body_size=5)))
+    assert (type(limits), limits) == (StrictLimits, StrictLimits(max_body_size=5))
 
 
 def test_the_package_doctests_include_the_methods() -> None:
