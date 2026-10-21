@@ -152,12 +152,13 @@ The table (mutation, module, the test that killed it) is in `CERT-1.0-MUTATIONS.
 
 ## Gates (item 15)
 
-At e644142 (the QA round 2 fixes) on the laptop from a fresh clone (CPython 3.14), each
+At 4b6b48c (the QA round 3 fixes) on Elena's PC from a fresh clone (CPython 3.14), each
 command on its own, with the fetched sources, Node.js llhttp, h11, the 0.2.0 oracle,
 `CHUNKEDTE_E2E=1` and `CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`,
-`mypy --strict src`, `mypy --strict src tests` and `pytest` (490 passed, no skips) all
-exit 0. The same run gave 416 passed at c074fc3 and 477 at 099ef17 (QA round 1 fixes). The interpreter matrix
-(item 10) was last run at d12c212 and is not repeated here.
+`mypy --strict src`, `mypy --strict src tests` and `pytest` (508 passed, no skips) all
+exit 0. The same run gave 416 passed at c074fc3, 477 at 099ef17 (QA round 1 fixes) and
+490 at e644142 (QA round 2 fixes). The interpreter matrix (item 10) was last run at
+d12c212 and is not repeated here.
 
 ## QA lenses (item 19)
 
@@ -165,27 +166,32 @@ Round 1 ran against 5a8e4e2: lenses a, b, c and e reported 21 findings, all fixe
 099ef17, each behaviour fix with a contract test that failed on 5a8e4e2 first. The table
 (finding, fix, test) is in `CERT-1.0-QA.md`.
 
-Round 2 ran against 276f0e7. Lens c confirmed F1 to F4 fixed and reported N1; lens e
-confirmed its 7 round 1 mutants killed, ran 40 new mutants (N01 to N40) on the changed
-code and reported the 11 survivors as G1 to G7. All are fixed in e644142. N1 and G1 are
-behaviour bugs: their tests failed on 276f0e7 first, and both changes are in the
-CHANGELOG. G2 to G7 were missing contracts: the tests pass on 276f0e7 and kill the named
-mutants. Each named mutant was re-applied alone to the tree at e644142 and was killed by
-the test named.
+Round 2 ran against 276f0e7: lens c reported N1 and lens e reported G1 to G7, all fixed
+in e644142. The table is in `CERT-1.0-QA.md`.
+
+Round 3 ran against 8061556. Lens c confirmed N1 fixed and reported N2; lens e confirmed
+its 11 round 2 mutants killed, ran 24 new mutants (R01 to R24) on the changed code and
+reported 6 non-equivalent survivors as F1 to F4 (R10, R12 and R19 are equivalent). All
+are fixed in 4b6b48c. N2 is a behaviour bug: its tests failed on 8061556 first (10
+cases), and the change is in the CHANGELOG. F1 to F4 were missing contracts: the tests
+pass on 8061556 and kill the named mutants. Each named mutant was re-applied alone to the
+fixed tree and was killed by the test named.
 
 | Finding | Fix | Pinned by (mutants killed) |
 | --- | --- | --- |
-| c-N1 a `--trailer` without a colon (a likely credential typo) was echoed | the message is `--trailer needs NAME:VALUE (no colon found)`, without the argument | `test_messages::test_a_trailer_argument_without_a_colon_is_never_echoed` (3 shapes, fails on 276f0e7) |
-| e-G1 `MemoryError` printed `chunkedte: ` and nothing: an exception is always true, so the name fallback was dead | `str(error) or type(error).__name__` | `test_messages::test_running_out_of_memory_names_the_error_and_exits_1` (encode, decode; fails on 276f0e7; N15, N16) |
-| e-G2 pickles of errors could drop `__notes__` and attributes | contract added | `test_pickles_keep_notes_and_attributes_of_errors` (N06) |
-| e-G3 pickles of a `ChunkedError` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N08) |
-| e-G4 pickles of a `Limits` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N11) |
-| e-G5 huge non-integer `--chunk-size` message | exact quoted message and stderr under 400 characters | `test_messages::test_a_huge_non_integer_chunk_size_is_quoted_briefly` (N13, N14) |
-| e-G6 malformed trailer name messages | exact message per branch (no colon, empty name, bad byte at offset 3 and at 0) | `test_messages::test_a_malformed_trailer_field_line_gets_its_exact_message` (N31, N32, N33) |
-| e-G7 offset of a non-latin-1 trailer value | exact message with offset 2 | `test_messages::test_a_non_latin_1_trailer_value_names_the_character_offset` (N37) |
+| c-N2 a refused trailer name was quoted, so a credential typed with a space or `=` before a colon inside it was echoed (CLI and `encode`) | the message gives the first bad character and its offset (`invalid byte 0x20 at offset 13 in a trailer field name`, `non-ASCII character U+00E9 at offset 3 ...`) or `empty trailer field name`, never the name | `test_cli_trailers::test_a_trailer_argument_with_a_colon_inside_the_secret_is_never_echoed` (3 shapes), `test_cli_trailers::test_a_bad_trailer_name_gives_the_first_bad_character_and_never_the_rest` (4 names), `test_cli_trailers::test_an_empty_trailer_name_is_named_as_such`; all fail on 8061556 |
+| e-F1 the empty-message fallback was pinned only for `MemoryError` | contract added: a bare `OSError` gives exit 1 and `chunkedte: OSError` | `test_cli_trailers::test_an_error_with_an_empty_message_is_named_by_its_type` (R01) |
+| e-F2 `--trailer NAME:` with an empty value | contract added: exit 0, `0
+X-E: 
 
-Tests named without a file are in `tests/test_contract_edges.py`. Gates at e644142 are
-under Gates (490 passed). Re-verification of round 2 by lenses c and e is pending.
+` | `test_cli_trailers::test_a_trailer_argument_with_an_empty_value_sends_an_empty_field` (R13) |
+| e-F3 whitespace around a `--trailer` name | contract added: `X-A : 1` and ` X-A: 1` exit 1 with the exact message | `test_cli_trailers::test_whitespace_around_a_trailer_argument_name_is_refused` (R20) |
+| e-F4 trimming of the `--trailer` value | contract added: SP and HTAB trimmed at both ends, 0xA0 kept, a trailing form feed refused with the exact message | `test_cli_trailers::test_a_trailer_argument_value_loses_only_spaces_and_tabs_at_its_ends`, `test_cli_trailers::test_a_form_feed_at_the_end_of_a_trailer_argument_value_is_refused` (R21, R22, R23) |
+
+The round 1 test `test_a_non_ascii_trailer_name_is_not_a_token` now expects the
+`non-ASCII character U+.... at offset` message, and the GUIDE example of a refused name
+shows the new message. Gates at 4b6b48c are under Gates. Re-verification of round 3 by
+lenses c and e is pending.
 
 ### Disputed findings
 

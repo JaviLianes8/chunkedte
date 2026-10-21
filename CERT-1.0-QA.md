@@ -1,4 +1,4 @@
-# chunkedte 1.0.0 QA round 1
+# chunkedte 1.0.0 QA rounds 1 and 2
 
 QA round 1 of item 19 in `CERT-1.0-REPORT.md`, against 5a8e4e2, fixed in 099ef17: each
 finding, its fix and the test that pins it. Tests named without a file are in
@@ -28,3 +28,27 @@ finding, its fix and the test that pins it. Tests named without a file are in
 
 The seven mutants of lens e were re-applied one at a time to a copy of 099ef17 and each
 was killed by the test named.
+
+## Round 2
+
+Round 2 ran against 276f0e7. Lens c confirmed F1 to F4 fixed and reported N1; lens e
+confirmed its 7 round 1 mutants killed, ran 40 new mutants (N01 to N40) on the changed
+code and reported the 11 survivors as G1 to G7. All are fixed in e644142. N1 and G1 are
+behaviour bugs: their tests failed on 276f0e7 first, and both changes are in the
+CHANGELOG. G2 to G7 were missing contracts: the tests pass on 276f0e7 and kill the named
+mutants. Each named mutant was re-applied alone to the tree at e644142 and was killed by
+the test named.
+
+| Finding | Fix | Pinned by (mutants killed) |
+| --- | --- | --- |
+| c-N1 a `--trailer` without a colon (a likely credential typo) was echoed | the message is `--trailer needs NAME:VALUE (no colon found)`, without the argument | `test_messages::test_a_trailer_argument_without_a_colon_is_never_echoed` (3 shapes, fails on 276f0e7) |
+| e-G1 `MemoryError` printed `chunkedte: ` and nothing: an exception is always true, so the name fallback was dead | `str(error) or type(error).__name__` | `test_messages::test_running_out_of_memory_names_the_error_and_exits_1` (encode, decode; fails on 276f0e7; N15, N16) |
+| e-G2 pickles of errors could drop `__notes__` and attributes | contract added | `test_pickles_keep_notes_and_attributes_of_errors` (N06) |
+| e-G3 pickles of a `ChunkedError` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N08) |
+| e-G4 pickles of a `Limits` subclass | contract added | `test_pickles_keep_the_type_of_subclasses` (N11) |
+| e-G5 huge non-integer `--chunk-size` message | exact quoted message and stderr under 400 characters | `test_messages::test_a_huge_non_integer_chunk_size_is_quoted_briefly` (N13, N14) |
+| e-G6 malformed trailer name messages | exact message per branch (no colon, empty name, bad byte at offset 3 and at 0) | `test_messages::test_a_malformed_trailer_field_line_gets_its_exact_message` (N31, N32, N33) |
+| e-G7 offset of a non-latin-1 trailer value | exact message with offset 2 | `test_messages::test_a_non_latin_1_trailer_value_names_the_character_offset` (N37) |
+
+Tests named without a file are in `tests/test_contract_edges.py`. Gates at e644142: 490
+passed. Lenses c and e confirmed every round 2 fix in round 3.
