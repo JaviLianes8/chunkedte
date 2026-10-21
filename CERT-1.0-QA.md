@@ -1,4 +1,4 @@
-# chunkedte 1.0.0 QA rounds 1 and 2
+# chunkedte 1.0.0 QA rounds 1 to 3
 
 QA round 1 of item 19 in `CERT-1.0-REPORT.md`, against 5a8e4e2, fixed in 099ef17: each
 finding, its fix and the test that pins it. Tests named without a file are in
@@ -52,3 +52,26 @@ the test named.
 
 Tests named without a file are in `tests/test_contract_edges.py`. Gates at e644142: 490
 passed. Lenses c and e confirmed every round 2 fix in round 3.
+
+## Round 3
+
+Round 3 ran against 8061556. Lens c confirmed N1 fixed and reported N2; lens e confirmed
+its 11 round 2 mutants killed, ran 24 new mutants (R01 to R24) on the changed code and
+reported 6 non-equivalent survivors as F1 to F4 (R10, R12 and R19 are equivalent). All
+are fixed in 4b6b48c. N2 is a behaviour bug: its tests failed on 8061556 first (10
+cases), and the change is in the CHANGELOG. F1 to F4 were missing contracts: the tests
+pass on 8061556 and kill the named mutants. Each named mutant was re-applied alone to the
+fixed tree and was killed by the test named.
+
+| Finding | Fix | Pinned by (mutants killed) |
+| --- | --- | --- |
+| c-N2 a refused trailer name was quoted, so a credential typed with a space or `=` before a colon inside it was echoed (CLI and `encode`) | the message gives the first bad character and its offset (`invalid byte 0x20 at offset 13 in a trailer field name`, `non-ASCII character U+00E9 at offset 3 ...`) or `empty trailer field name`, never the name | `test_cli_trailers::test_a_trailer_argument_with_a_colon_inside_the_secret_is_never_echoed` (3 shapes), `test_cli_trailers::test_a_bad_trailer_name_gives_the_first_bad_character_and_never_the_rest` (4 names), `test_cli_trailers::test_an_empty_trailer_name_is_named_as_such`; all fail on 8061556 |
+| e-F1 the empty-message fallback was pinned only for `MemoryError` | contract added: a bare `OSError` gives exit 1 and `chunkedte: OSError` | `test_cli_trailers::test_an_error_with_an_empty_message_is_named_by_its_type` (R01) |
+| e-F2 `--trailer NAME:` with an empty value | contract added: exit 0, `0\r\nX-E: \r\n\r\n` | `test_cli_trailers::test_a_trailer_argument_with_an_empty_value_sends_an_empty_field` (R13) |
+| e-F3 whitespace around a `--trailer` name | contract added: `X-A : 1` and ` X-A: 1` exit 1 with the exact message | `test_cli_trailers::test_whitespace_around_a_trailer_argument_name_is_refused` (R20) |
+| e-F4 trimming of the `--trailer` value | contract added: SP and HTAB trimmed at both ends, 0xA0 kept, a trailing form feed refused with the exact message | `test_cli_trailers::test_a_trailer_argument_value_loses_only_spaces_and_tabs_at_its_ends`, `test_cli_trailers::test_a_form_feed_at_the_end_of_a_trailer_argument_value_is_refused` (R21, R22, R23) |
+
+The round 1 test `test_a_non_ascii_trailer_name_is_not_a_token` now expects the
+`non-ASCII character U+.... at offset` message, and the GUIDE example of a refused name
+shows the new message. Gates at 4b6b48c: 508 passed.
+Lenses c and e confirmed every round 3 fix in round 4.
