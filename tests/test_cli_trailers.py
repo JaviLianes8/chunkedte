@@ -96,3 +96,24 @@ def test_a_trailer_argument_value_loses_only_spaces_and_tabs_at_its_ends(
 def test_a_form_feed_at_the_end_of_a_trailer_argument_value_is_refused() -> None:
     expected = "chunkedte: invalid byte 0x0c at offset 1 in the value of trailer field X-A\n"
     assert _encode("X-A: 1\x0c") == (1, b"", expected)
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("X" * 64 + " tail", "invalid byte 0x20 at offset 64"),
+        ("X" * 70 + "\u00e9", "non-ASCII character U+00E9 at offset 70"),
+        (" ", "invalid byte 0x20 at offset 0"),
+        ("\t", "invalid byte 0x09 at offset 0"),
+        ("\U0001f600", "non-ASCII character U+1F600 at offset 0"),
+        ("X-\U00010000", "non-ASCII character U+10000 at offset 2"),
+        ("X.Y Z", "invalid byte 0x20 at offset 3"),
+        ("a!b c", "invalid byte 0x20 at offset 3"),
+        ("a~b'c#d|e`f^g*h+i&j%k$l Z", "invalid byte 0x20 at offset 23"),
+        ("\u212aeep-alive", "non-ASCII character U+212A at offset 0"),
+    ],
+)
+def test_the_whole_trailer_name_is_checked_before_anything_else(name: str, message: str) -> None:
+    with pytest.raises(ChunkedError) as caught:
+        encode(b"", trailers=[(name, "v")])
+    assert str(caught.value) == f"{message} in a trailer field name"
