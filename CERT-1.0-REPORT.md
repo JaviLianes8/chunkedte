@@ -39,8 +39,8 @@ Progress:
 | 15 | Gates each exit 0 | PASS: see Gates |
 | 16 | Independent reviewer | pending |
 | 17 | PR and trace guard | PR #3 from `release/1.0.0`, trace guard CLEAN; merge and publish left to the maintainer |
-| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the non-equivalent survivors of lens e's rounds 1 to 4 (7, 11, 6 and 5) now killed |
-| 19 | Five independent QA lenses | rounds 1 to 4 findings fixed (see QA lenses); re-verification of round 4 by lens e pending |
+| 18 | Contracts bite (mutations) | PASS: author round 40 of 40 killed (table in `CERT-1.0-MUTATIONS.md`); the non-equivalent survivors of lens e's rounds 1 to 5 (7, 11, 6, 5 and 3) now killed |
+| 19 | Five independent QA lenses | rounds 1 to 5 findings fixed (see QA lenses); re-verification of round 5 by lens e pending |
 
 ## Baseline on 0.2.0 (before any change)
 
@@ -157,8 +157,12 @@ command on its own, with the fetched sources, Node.js llhttp, h11, the 0.2.0 ora
 `CHUNKEDTE_E2E=1` and `CHUNKEDTE_E2E_PYPI=1`: `ruff format --check .`, `ruff check .`,
 `mypy --strict src`, `mypy --strict src tests` and `pytest` (518 passed, no skips) all
 exit 0. The same run gave 416 passed at c074fc3, 477 at 099ef17 (QA round 1 fixes),
-490 at e644142 (QA round 2 fixes) and 508 at 4b6b48c (QA round 3 fixes). The interpreter
-matrix (item 10) was last run at d12c212 and is not repeated here.
+490 at e644142 (QA round 2 fixes) and 508 at 4b6b48c (QA round 3 fixes). At 4f14186 (the QA
+round 5 tests) on Elena's PC from a fresh clone of that commit (CPython 3.14, fetched
+sources and h11, without the opt-in e2e and 0.2.0 oracle variables): `ruff format
+--check .`, `ruff check .` and `mypy --strict src` exit 0 and `pytest` exits 0 with 515
+passed and 7 skipped (the 3 wheel e2e and 4 upgrade tests). The source is unchanged since
+3c84ffb. The interpreter matrix (item 10) was last run at d12c212 and is not repeated here.
 
 ## QA lenses (item 19)
 
@@ -172,25 +176,26 @@ in e644142. The table is in `CERT-1.0-QA.md`.
 Round 3 ran against 8061556: lens c reported N2 and lens e reported F1 to F4, all fixed in
 4b6b48c. The table is in `CERT-1.0-QA.md`.
 
-Round 4 ran against ee22527. Lens c confirmed N2 fixed and reported PASS. Lens e
-confirmed its round 3 mutants (R01, R13, R20 to R23) and its round 2 mutants killed, ran
-32 new mutants (Q01 to Q32) on the new `_check_name` and reported the 5 non-equivalent
-survivors as E1 to E5 (Q04, Q06, Q21, Q24 and Q30 are equivalent). None is a behaviour
-bug: each was a missing contract, so the code and the CHANGELOG are unchanged. All are
-pinned in 3c84ffb by one parametrized test,
-`test_cli_trailers::test_the_whole_trailer_name_is_checked_before_anything_else`, which
-passes on ee22527. Each named mutant was re-applied alone to the tree at 3c84ffb and was
-killed by that test.
+Round 4 ran against ee22527: lens c reported PASS and lens e reported E1 to E5, all
+missing contracts, pinned in 3c84ffb. The table is in `CERT-1.0-QA.md`.
+
+Round 5 ran against a4a811d (the source is unchanged since ee22527). Lens e confirmed its
+round 4 mutants Q03, Q07, Q17, Q23 and Q32 killed by the full suite, ran 10 new mutants
+(S01 to S10) on `_check_name` and `format_field_line`, and reported the 3 survivors as F1
+to F3 (none equivalent). None is a behaviour bug: each was a missing contract, so the code
+and the CHANGELOG are unchanged. All are pinned in 4f14186, and the new tests pass on
+a4a811d. Each named mutant was re-applied alone to a copy of the tree at 4f14186 and was
+killed by the test named; the unmutated copy passed.
 
 | Finding | Contract added (exact message, `in a trailer field name`) | Mutant killed |
 | --- | --- | --- |
-| e-E1 a bad character after offset 63 | `"X" * 64 + " tail"`: `invalid byte 0x20 at offset 64`; `"X" * 70 + "\u00e9"`: `non-ASCII character U+00E9 at offset 70` | Q03 |
-| e-E2 a blank name | `" "`: `invalid byte 0x20 at offset 0`; `"\t"`: `invalid byte 0x09 at offset 0` | Q07 |
-| e-E3 a character outside the BMP | `"\U0001f600"`: `U+1F600 at offset 0`; `"X-\U00010000"`: `U+10000 at offset 2` | Q17 |
-| e-E4 punctuation tchars before the bad byte | `X.Y Z` and `a!b c`: `0x20 at offset 3`; a name with eleven more punctuation tchars before a space: `0x20 at offset 23` | Q23 |
-| e-E5 the name check runs before the forbidden list | Kelvin sign `\u212aeep-alive` (lower-cases to `keep-alive`): `non-ASCII character U+212A at offset 0`, not the forbidden message | Q32 |
+| e-F1 no refused name longer than about 71 characters | `test_cli_trailers::test_a_very_long_trailer_name_is_checked_to_its_end`: `"X" * 100_000 + " tail"` gives `invalid byte 0x20 at offset 100000`; `"X" * 100_000 + "\u00e9"` gives `non-ASCII character U+00E9 at offset 100000` | S01 (`_check_name(name[:1024])`) |
+| e-F2 an underscore before the bad byte | `X_Y Z`: `invalid byte 0x20 at offset 3`, added to `test_the_whole_trailer_name_is_checked_before_anything_else` | S03 (per-character check without `_`) |
+| e-F3 DEL in a name | `"X\x7f"`: `invalid byte 0x7f at offset 1`, same test | S04 (`ord(char) >= 0x7F` as the non-ASCII test) |
 
-Gates at 3c84ffb are under Gates. Re-verification of round 4 by lens e is pending.
+The long names are built inside their own test, not passed as parameters: a 100,000
+character parameter id does not fit in the `PYTEST_CURRENT_TEST` environment variable on
+Windows. Gates at 4f14186 are under Gates. Re-verification of round 5 by lens e is pending.
 
 ### Disputed findings
 

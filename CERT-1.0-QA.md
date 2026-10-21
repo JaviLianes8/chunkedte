@@ -1,4 +1,4 @@
-# chunkedte 1.0.0 QA rounds 1 to 3
+# chunkedte 1.0.0 QA rounds 1 to 4
 
 QA round 1 of item 19 in `CERT-1.0-REPORT.md`, against 5a8e4e2, fixed in 099ef17: each
 finding, its fix and the test that pins it. Tests named without a file are in
@@ -75,3 +75,25 @@ The round 1 test `test_a_non_ascii_trailer_name_is_not_a_token` now expects the
 `non-ASCII character U+.... at offset` message, and the GUIDE example of a refused name
 shows the new message. Gates at 4b6b48c: 508 passed.
 Lenses c and e confirmed every round 3 fix in round 4.
+
+## Round 4
+
+Round 4 ran against ee22527. Lens c confirmed N2 fixed and reported PASS. Lens e
+confirmed its round 3 mutants (R01, R13, R20 to R23) and its round 2 mutants killed, ran
+32 new mutants (Q01 to Q32) on the new `_check_name` and reported the 5 non-equivalent
+survivors as E1 to E5 (Q04, Q06, Q21, Q24 and Q30 are equivalent). None is a behaviour
+bug: each was a missing contract, so the code and the CHANGELOG are unchanged. All are
+pinned in 3c84ffb by one parametrized test,
+`test_cli_trailers::test_the_whole_trailer_name_is_checked_before_anything_else`, which
+passes on ee22527. Each named mutant was re-applied alone to the tree at 3c84ffb and was
+killed by that test.
+
+| Finding | Contract added (exact message, `in a trailer field name`) | Mutant killed |
+| --- | --- | --- |
+| e-E1 a bad character after offset 63 | `"X" * 64 + " tail"`: `invalid byte 0x20 at offset 64`; `"X" * 70 + "\u00e9"`: `non-ASCII character U+00E9 at offset 70` | Q03 |
+| e-E2 a blank name | `" "`: `invalid byte 0x20 at offset 0`; `"\t"`: `invalid byte 0x09 at offset 0` | Q07 |
+| e-E3 a character outside the BMP | `"\U0001f600"`: `U+1F600 at offset 0`; `"X-\U00010000"`: `U+10000 at offset 2` | Q17 |
+| e-E4 punctuation tchars before the bad byte | `X.Y Z` and `a!b c`: `0x20 at offset 3`; a name with eleven more punctuation tchars before a space: `0x20 at offset 23` | Q23 |
+| e-E5 the name check runs before the forbidden list | Kelvin sign `\u212aeep-alive` (lower-cases to `keep-alive`): `non-ASCII character U+212A at offset 0`, not the forbidden message | Q32 |
+
+Gates at 3c84ffb: 518 passed. Lens e confirmed every round 4 fix in round 5.
