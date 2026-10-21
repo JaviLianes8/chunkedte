@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import astuple, dataclass, fields
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -12,7 +13,19 @@ class Limits:
     ``max_line_size`` bounds one chunk-size line (size plus extensions, CRLF excluded),
     ``max_extensions_size`` the extension bytes of the whole message, ``max_chunk_size`` the
     value of one chunk-size, ``max_body_size`` the decoded body (``None`` for no bound) and
-    ``max_trailer_size`` the trailer field lines including their CRLFs.
+    ``max_trailer_size`` the trailer field lines including their CRLFs. Every bound is a
+    non-negative ``int`` (:class:`TypeError` or :class:`ValueError` otherwise). A size of
+    more than 16 significant hex digits is refused whatever ``max_chunk_size`` says.
+
+    >>> from chunkedte import Decoder, LimitError, Limits
+    >>> limits = Limits(max_body_size=1024)
+    >>> limits.max_body_size, limits.max_line_size
+    (1024, 4096)
+    >>> try:
+    ...     Decoder(limits).feed(b"401\\r\\n")
+    ... except LimitError as error:
+    ...     print(error)
+    body exceeds max_body_size
     """
 
     max_line_size: int = 4096
@@ -31,3 +44,10 @@ class Limits:
                 raise TypeError(f"{field.name} must be an int, got {type(value).__name__}")
             if value < 0:
                 raise ValueError(f"{field.name} must not be negative")
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        if type(self) is not Limits:
+            return super().__reduce__()
+        from . import _restore
+
+        return _restore, ("Limits", astuple(self))

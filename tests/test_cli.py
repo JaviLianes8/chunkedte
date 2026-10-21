@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import chunkedte
 from chunkedte import encode
 from chunkedte._cli import main
 
@@ -80,7 +81,6 @@ def test_encode_adds_trailers() -> None:
 @pytest.mark.parametrize(
     ("argv", "error"),
     [
-        (["encode", "--chunk-size", "0"], "positive"),
         (["encode", "--trailer", "novalue"], "NAME:VALUE"),
         (["encode", "--trailer", "Content-Length: 1"], "cannot be sent"),
     ],
@@ -108,6 +108,66 @@ def test_python_dash_m_runs_the_tool() -> None:
         input=b"2\r\nok\r\n0\r\n\r\n",
         capture_output=True,
         check=False,
-        cwd=Path(__file__).resolve().parents[1] / "src",
+        # The folder holding the package: src in a checkout, site-packages when installed.
+        cwd=Path(chunkedte.__file__).resolve().parents[1],
     )
     assert (result.returncode, result.stdout) == (0, b"ok")
+
+
+@pytest.mark.parametrize("value", ["0", "-3", "x", "1.5"])
+def test_a_chunk_size_that_is_not_a_positive_int_is_a_usage_error(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as caught:
+        _run(["encode", "--chunk-size", value], b"data")
+    assert caught.value.code == 2
+    assert "--chunk-size" in capsys.readouterr().err
+
+
+class _Counting(io.BytesIO):
+    def __init__(self, data: bytes) -> None:
+        super().__init__(data)
+        self.asked: list[int] = []
+        self.reads: list[int] = []
+
+    def read(self, size: int | None = -1) -> bytes:
+        self.asked.append(-1 if size is None else size)
+        block = super().read(size)
+        self.reads.append(len(block))
+        return block
+
+
+@pytest.mark.parametrize("size", [str(10**30), str(2**63 - 1), "4000000000000"])
+def test_a_huge_chunk_size_reads_in_bounded_blocks(size: str) -> None:
+    source = _Counting(b"hello")
+    out, err = io.BytesIO(), io.StringIO()
+    assert main(["encode", "--chunk-size", size], source, out, err) == 0
+    assert out.getvalue() == b"5\r\nhello\r\n0\r\n\r\n"
+    assert all(0 < asked <= 65536 for asked in source.asked)
+
+
+def test_encode_fills_each_chunk_from_short_reads() -> None:
+    class Trickle(io.BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            return super().read(min(size or 1, 2))
+
+    out = io.BytesIO()
+    assert main(["encode", "--chunk-size", "5"], Trickle(b"abcdefg"), out, io.StringIO()) == 0
+    assert out.getvalue() == b"5\r\nabcde\r\n2\r\nfg\r\n0\r\n\r\n"
+
+
+def test_encode_splits_a_trailer_argument_on_the_first_colon() -> None:
+    code, out, _ = _run(["encode", "--trailer", "X-Time:12:30"], b"hi")
+    assert (code, out) == (0, b"2\r\nhi\r\n0\r\nX-Time: 12:30\r\n\r\n")
+
+
+def test_decode_stops_reading_once_the_message_is_complete() -> None:
+    source = _Counting(b"1\r\na\r\n0\r\n\r\n" + b"z" * 5_000_000)
+    code = main(["decode"], source, io.BytesIO(), io.StringIO())
+    assert code == 1
+    assert sum(source.reads) <= 65536 + 1
+
+
+def test_decode_writes_a_tab_in_a_trailer_raw_and_escapes_bytes_above_0x7f() -> None:
+    code, _, err = _run(["decode"], b"0\r\nX: a\tb\xe9\r\n\r\n")
+    assert (code, err) == (0, "X: a\tb\\xe9\n")

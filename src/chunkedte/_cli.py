@@ -4,13 +4,24 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterator
 from typing import BinaryIO, TextIO
 
 from ._decode import Decoder
 from ._encode import DEFAULT_CHUNK_SIZE, Encoder, encode
-from ._errors import ChunkedError
+from ._errors import ChunkedError, quote
 
 _BLOCK = 65536
+
+
+def _positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an integer: {quote(text)}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, got {value}")
+    return value
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -22,7 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     decode.add_argument("file", nargs="?", help="input file (default: stdin)")
     encode = commands.add_parser("encode", help="frame the input as a chunked body")
     encode.add_argument("file", nargs="?", help="input file (default: stdin)")
-    encode.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
+    encode.add_argument("--chunk-size", type=_positive_int, default=DEFAULT_CHUNK_SIZE)
     encode.add_argument(
         "--trailer", action="append", default=[], metavar="NAME:VALUE", help="repeatable"
     )
@@ -35,7 +46,10 @@ def main(
     stdout: BinaryIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
-    """Run the command line tool and return its exit status."""
+    """Run the command line tool and return its exit status.
+
+    A bad command line exits with status 2 through :class:`SystemExit`, as argparse does.
+    """
     args = _parser().parse_args(argv)
     out = sys.stdout.buffer if stdout is None else stdout
     err = sys.stderr if stderr is None else stderr
@@ -45,23 +59,35 @@ def main(
             with open(args.file, "rb") as handle:
                 return _run(args, handle, out, err)
         return _run(args, source, out, err)
-    except (ChunkedError, ValueError, OSError) as error:
-        print(f"chunkedte: {error}", file=err)
+    except (ChunkedError, ValueError, OSError, MemoryError) as error:
+        print(f"chunkedte: {str(error) or type(error).__name__}", file=err)
         return 1
 
 
 def _run(args: argparse.Namespace, source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
     if args.command == "decode":
         return _decode(source, out, err)
-    if args.chunk_size <= 0:
-        raise ValueError("--chunk-size must be positive")
     trailers = [_split_trailer(text) for text in args.trailer]
     closing = encode(b"", trailers=trailers)  # validates the trailers before any output
     encoder = Encoder()
-    while block := source.read(args.chunk_size):
-        out.write(encoder.write(block))
+    for chunk in _chunks(source, args.chunk_size):
+        out.write(encoder.write(chunk))
     out.write(closing)
     return 0
+
+
+def _chunks(source: BinaryIO, size: int) -> Iterator[bytes]:
+    # Bounded reads: a huge --chunk-size must not allocate that much up front.
+    while True:
+        parts: list[bytes] = []
+        have = 0
+        while have < size and (block := source.read(min(size - have, _BLOCK))):
+            parts.append(block)
+            have += len(block)
+        if parts:
+            yield b"".join(parts)
+        if have < size:
+            return
 
 
 def _decode(source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
@@ -83,5 +109,6 @@ def _decode(source: BinaryIO, out: BinaryIO, err: TextIO) -> int:
 def _split_trailer(text: str) -> tuple[str, str]:
     name, colon, value = text.partition(":")
     if not colon:
-        raise ValueError(f"--trailer needs NAME:VALUE, got {text!r}")
+        # Never quote the argument: a typo for "Authorization: <token>" holds the token.
+        raise ValueError("--trailer needs NAME:VALUE (no colon found)")
     return name, value.strip(" \t")

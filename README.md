@@ -1,5 +1,7 @@
 # chunkedte
 
+[![Lianes8 Certified](https://lianes8studio.com/certified/lianes8-certified-badge.svg)](https://lianes8studio.com/certified)
+
 Strict, incremental, typed, zero-dependency codec for HTTP/1.1 chunked transfer coding
 (RFC 9112 section 7.1).
 
@@ -98,17 +100,24 @@ for te, cl in [("chunked", "12"), ("chunked, chunked", None), ("chunked, gzip", 
 ### Command line
 
 ```
-$ printf '5\r\nhello\r\n0\r\nX-Sum: 1\r\n\r\n' | chunkedte decode
+$ printf '5\r\nhello\r\n0\r\nX-Sum: 1\r\n\r\n' > message.bin
+$ chunkedte decode message.bin 2>/dev/null; echo
 hello
+$ chunkedte decode message.bin 2>&1 >/dev/null
 X-Sum: 1
-$ printf 'abc' | chunkedte encode --chunk-size 2 --trailer "X-Sum: 1"
+$ printf 'abc' | chunkedte encode --chunk-size 2 --trailer "X-Sum: 1" | od -c
+0000000   2  \r  \n   a   b  \r  \n   1  \r  \n   c  \r  \n   0  \r  \n
+0000020   X   -   S   u   m   :       1  \r  \n  \r  \n
+0000034
 ```
 
-`decode` writes the body to stdout and the trailer fields to stderr; `encode` frames stdin
-(or a file) as a chunked body. Both exit with status 1 and a message on bad input; body
-bytes decoded before the error may already be on stdout, so treat the output of a failed
-run as truncated. Trailer bytes outside printable ASCII are written as escapes.
-`python -m chunkedte` works too.
+`decode` writes the body to stdout exactly as decoded (no newline is added) and the
+trailer fields to stderr, one `name: value` line each, with bytes 0x80 to 0xFF written as
+`\xNN` escapes (a tab stays a tab). `encode` frames stdin (or a file) as a chunked body.
+Both exit with status 0 on success, 1 with a `chunkedte: ...` message on bad input, and 2
+with a usage message on a bad command line (such as a `--chunk-size` below 1). Body bytes
+decoded before an error may already be on stdout, so treat the output of a failed run as
+truncated. `python -m chunkedte` works too.
 
 ## What "strict" means here
 
@@ -136,24 +145,53 @@ section 6.5.1 needs before the content: framing and routing (Content-Length,
 Transfer-Encoding, Trailer, TE, Host, Connection, Keep-Alive, Upgrade, Max-Forwards),
 authentication (Authorization, Proxy-Authorization, WWW-Authenticate, Proxy-Authenticate,
 Cookie, Set-Cookie), request modifiers and response controls (Expect, Range,
-Cache-Control) and content format (Content-Type, Content-Encoding, Content-Range).
+Cache-Control, and the conditionals If-Match, If-None-Match, If-Modified-Since,
+If-Unmodified-Since and If-Range) and content format (Content-Type, Content-Encoding,
+Content-Range). That is a fixed list: other fields a recipient needs before the content
+are yours to keep out of the trailers.
 `is_chunked` leaves the rest of RFC 9112 section 6.3 to you: responses to HEAD, 1xx, 204,
 304 and 2xx to CONNECT carry no body, and an HTTP/1.0 message with Transfer-Encoding has
 faulty framing. There is no lenient mode.
 
+## API and guarantees
+
+Eight names, stable since 1.0.0: `decode`, `Decoder`, `encode`, `Encoder`, `is_chunked`,
+`Limits`, `ChunkedError` and `LimitError`. Wrong argument types raise `TypeError`, every
+problem with the bytes or the fields raises `ChunkedError` (a `ValueError`), and a passed
+bound raises its subclass `LimitError`, whatever split the bytes arrived in. Messages
+quote at most 64 characters of the input and never quote a trailer value or a trailer
+line, which can hold credentials: they name the field, the bad byte and its offset.
+The [GUIDE](https://github.com/JaviLianes8/chunkedte/blob/main/GUIDE.md) describes each
+name in detail and the [CHANGELOG](https://github.com/JaviLianes8/chunkedte/blob/main/CHANGELOG.md)
+what changed between releases.
+
 ## Why
 
-Chunked transfer coding is simple to frame and easy to get subtly wrong: the terminating
-`0` chunk, the closing blank line, extensions and trailers are routinely mishandled, and
-the security advisories of the last few years (waitress, h11, aiohttp, netty, Go net/http,
-Node.js) are all variations on a parser accepting bytes another parser reads differently.
-The existing Python options are tied to one HTTP stack (`h11`, `aiohttp`) or to one server.
-This is a standalone, typed, zero-dependency codec with the strict behaviour by default:
-reach for it when you move chunked framing yourself and do not want a whole HTTP stack.
+Chunked transfer coding is simple to frame and easy to get subtly wrong, and every
+leniency is a way for two parsers to disagree on where a message ends. The chunked
+decoders most Python code reaches today sit inside an HTTP stack and are lenient.
+`http.client` in the standard library (checked on CPython 3.13) reads the chunk sizes
+`+5`, `0x5`, `0_5` and ` 5`, ends a size line at a bare LF and skips whatever two bytes
+follow the chunk data. `h11` (checked on 0.16.0) decodes chunks only inside its
+connection object, does not check chunk extensions, accepts a bare LF at the end of the
+trailer section and unfolds obs-fold trailer lines. `chunkedte` is a standalone, typed,
+zero-dependency codec that accepts exactly the RFC 9112 grammar, bounds what a peer can
+make you buffer, and gives you the trailers and the bytes after the message. It is tested
+against the RFC text itself, the llhttp parser inside Node.js and its test corpus, `h11`,
+`http.client` and the 0.2.0 release.
+
+## Development
+
+`python scripts/fetch_upstream.py` downloads RFC 9112, RFC 9110 and the llhttp test files
+listed in `tests/upstream/MANIFEST.json` (they are not part of the repository; their tests
+skip without them). With Node.js on the `PATH` the tests also run llhttp, and with `h11`
+installed they compare against it. Set `CHUNKEDTE_V02` to an unpacked 0.2.0 wheel to
+compare with that release. `scripts/check.ps1` runs format, lint, types and tests. Set
+`CHUNKEDTE_E2E=1` to also build the wheel and sdist and test the installed package.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/JaviLianes8/chunkedte/blob/main/LICENSE).
 
 ## Links
 

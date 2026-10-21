@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import enum
 
-from ._errors import ChunkedError, LimitError
+from ._errors import ChunkedError, LimitError, quote, require_bytes
 from ._grammar import SIZE_LINE, parse_field_line
 from ._limits import Limits
+from ._lines import take_line
 
-_CR = 0x0D
 # Sixteen significant hex digits hold any value below 2**64; more is never a real size.
 _MAX_SIZE_DIGITS = 16
 
@@ -30,9 +30,18 @@ class Decoder:
     section 6.5.2). Bytes after the final CRLF land in :attr:`unused_data`. When
     :meth:`feed` raises, the pieces decoded in that call are dropped, and every later
     :meth:`feed` raises again.
+
+    >>> from chunkedte import Decoder
+    >>> decoder = Decoder()
+    >>> decoder.feed(b"5\\r\\nhel"), decoder.feed(b"lo\\r\\n0\\r\\n\\r\\n")
+    ([b'hel'], [b'lo'])
+    >>> decoder.is_complete
+    True
     """
 
     def __init__(self, limits: Limits | None = None) -> None:
+        if limits is not None and not isinstance(limits, Limits):
+            raise TypeError(f"limits must be a Limits, got {type(limits).__name__}")
         self._limits = Limits() if limits is None else limits
         self._buffer = bytearray()
         self._scanned = 0
@@ -46,23 +55,66 @@ class Decoder:
 
     @property
     def is_complete(self) -> bool:
-        """Whether the last chunk and the trailer section have been fully consumed."""
+        """Whether the last chunk and the trailer section have been fully consumed.
+
+        >>> from chunkedte import Decoder
+        >>> decoder = Decoder()
+        >>> _ = decoder.feed(b"0\\r\\n")
+        >>> decoder.is_complete
+        False
+        >>> _ = decoder.feed(b"\\r\\n")
+        >>> decoder.is_complete
+        True
+        """
         return self._state is _State.DONE
 
     @property
     def trailers(self) -> list[tuple[str, str]]:
-        """Trailer fields received so far as ``(name, value)`` pairs, in arrival order."""
+        """Trailer fields received so far as ``(name, value)`` pairs, in arrival order.
+
+        Names keep their case; values are OWS-trimmed and decoded as latin-1.
+
+        >>> from chunkedte import Decoder
+        >>> decoder = Decoder()
+        >>> _ = decoder.feed(b"0\\r\\nDigest: x\\r\\nNote:  a b \\r\\n\\r\\n")
+        >>> decoder.trailers
+        [('Digest', 'x'), ('Note', 'a b')]
+        """
         return list(self._trailers)
 
     @property
     def unused_data(self) -> bytes:
-        """Bytes received after the end of the chunked message (for example the next request)."""
+        """Bytes received after the end of the chunked message (for example the next request).
+
+        Empty until the message is complete.
+
+        >>> from chunkedte import Decoder
+        >>> decoder = Decoder()
+        >>> decoder.feed(b"1\\r\\na\\r\\n0\\r\\n\\r\\nGET / HTTP/1.1")
+        [b'a']
+        >>> decoder.unused_data
+        b'GET / HTTP/1.1'
+        """
         return bytes(self._buffer) if self._state is _State.DONE else b""
 
     def feed(self, data: bytes | bytearray | memoryview) -> list[bytes]:
-        """Append ``data`` and return every decoded body piece now available."""
+        """Append ``data`` and return every decoded body piece now available.
+
+        Raises :class:`ChunkedError` once a size or trailer line that breaks the grammar
+        is complete (the CRLF after chunk data is checked byte by byte), and
+        :class:`LimitError` as soon as a bound is certain to be passed; the error class
+        never depends on how the input is split. Data that is not ``bytes``,
+        ``bytearray`` or ``memoryview`` raises :class:`TypeError`.
+
+        >>> from chunkedte import Decoder
+        >>> Decoder().feed(b"3\\r\\nabc\\r\\n2\\r\\nde\\r\\n")
+        [b'abc', b'de']
+        """
+        require_bytes(data)
         if self._error is not None:
             raise ChunkedError(f"the decoder already failed: {self._error}")
+        if isinstance(data, memoryview) and not data.contiguous:  # ValueError when released
+            data = data.tobytes()  # bytearray cannot append a strided view
         self._buffer += data
         out: list[bytes] = []
         try:
@@ -85,12 +137,14 @@ class Decoder:
         return False
 
     def _read_size(self) -> bool:
-        line = self._take_line(self._limits.max_line_size, "chunk-size line")
+        line, self._scanned = take_line(
+            self._buffer, self._scanned, self._limits.max_line_size, "chunk-size line"
+        )
         if line is None:
             return False
         match = SIZE_LINE.fullmatch(line)
         if match is None:
-            raise ChunkedError(f"malformed chunk-size line: {line[:64]!r}")
+            raise ChunkedError(f"malformed chunk-size line: {quote(line)}")
         digits, extensions = match.group(1, 2)
         self._extensions_size += len(extensions)
         if self._extensions_size > self._limits.max_extensions_size:
@@ -132,7 +186,7 @@ class Decoder:
 
     def _read_trailer(self) -> bool:
         budget = max(self._limits.max_trailer_size - self._trailer_size - 2, 0)
-        line = self._take_line(budget, "trailer section")
+        line, self._scanned = take_line(self._buffer, self._scanned, budget, "trailer section")
         if line is None:
             return False
         if not line:
@@ -141,37 +195,3 @@ class Decoder:
         self._trailer_size += len(line) + 2
         self._trailers.append(parse_field_line(line))
         return True
-
-    def _take_line(self, limit: int, what: str) -> bytes | None:
-        """Cut one CRLF-terminated line off the buffer, scanning each byte only once."""
-        end = self._buffer.find(b"\n", self._scanned)
-        if end == -1:
-            self._scanned = len(self._buffer)
-            if self._scanned > limit + 1:
-                raise LimitError(f"{what} exceeds its limit")
-            return None
-        self._scanned = 0
-        if end == 0 or self._buffer[end - 1] != _CR:
-            raise ChunkedError(f"bare LF in the {what}")
-        if end - 1 > limit:
-            raise LimitError(f"{what} exceeds its limit")
-        line = bytes(self._buffer[: end - 1])
-        del self._buffer[: end + 1]
-        if _CR in line:
-            raise ChunkedError(f"bare CR in the {what}")
-        return line
-
-
-def decode(data: bytes | bytearray | memoryview, *, limits: Limits | None = None) -> bytes:
-    """Decode one complete chunked message and return the body.
-
-    Raises :class:`ChunkedError` if the message is malformed, not terminated, or followed
-    by more bytes.
-    """
-    decoder = Decoder(limits)
-    pieces = decoder.feed(data)
-    if not decoder.is_complete:
-        raise ChunkedError("incomplete chunked message")
-    if decoder.unused_data:
-        raise ChunkedError("bytes after the end of the chunked message")
-    return b"".join(pieces)
